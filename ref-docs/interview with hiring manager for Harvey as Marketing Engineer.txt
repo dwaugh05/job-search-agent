@@ -1,0 +1,980 @@
+11:32:01 --> 11:32:01
+Wei Zhao: Hello
+
+11:32:01 --> 11:32:02
+Doran: Hello
+
+11:32:01 --> 11:32:04
+Wei Zhao: Hi, good morning!
+
+11:32:02 --> 11:32:04
+Doran: Good morning. How are you today?
+
+11:32:04 --> 11:32:09
+Wei Zhao: I'm good! Teach me how to say your name correctly.
+
+11:32:07 --> 11:32:11
+Doran: Sure, we'll do that both ways. I'm Doran like
+
+11:32:10 --> 11:32:11
+Wei Zhao: Doran
+
+11:32:11 --> 11:32:13
+Doran: like corn, but with a D.
+
+11:32:14 --> 11:32:17
+Wei Zhao: Awesome. Nice to meet you. My name is Wei.
+
+11:32:16 --> 11:32:21
+Doran: Wait, nice. Nice to meet you as well too. Thanks for taking the time to meet with me this morning.
+
+11:32:21 --> 11:32:31
+Wei Zhao: Of course, thank you for your time too. I'm excited to dive in and learn more about you. Maybe we'll do a quick self-intro and I can start first and you can tell me more about yourself.
+
+11:32:28 --> 11:32:30
+Doran: Okay.
+
+11:32:32 --> 11:32:50
+Wei Zhao: Awesome, great. So my name is Wei Zhao. I lead demand and growth here at Harvey. I joined about four months ago. Pretty new to the company, but quickly because we're growing so fast, I've become one of the most tenured marketers on the team now. Before Harvey, I was at a company called Moveworks
+
+11:32:31 --> 11:32:32
+Doran: Okay.
+
+11:32:50 --> 11:33:07
+Wei Zhao: I'm not sure if you've heard of them before, but they are in the AI agent space supporting internal employees. So I was there for almost five years building, scaling demand gen, and then the company got acquired last year by ServiceNow. So that was nice, nice excerpt. Before Moveworks, I was at a company called Alteryx
+
+11:33:07 --> 11:33:24
+Wei Zhao: They're in the data analytics and data science base. I was there for almost seven years joined really early on as well, build and scale the entire global digital marketing function. Yeah, that's in a nutshell, my quick intro on the team, demand gen and growth
+
+11:33:24 --> 11:33:40
+Wei Zhao: As you can probably imagine, has the typical dimension functions, such as integrated campaigns, lifecycle marketing, digital marketing, from paid to organic marketing operations as well. So this role actually sits on the marketing operations team that I'm so excited to build
+
+11:33:40 --> 11:33:44
+Wei Zhao: So yeah, love to hear more about you.
+
+11:33:43 --> 11:33:47
+Doran: Sure. I guess I'll give you
+
+11:33:47 --> 11:34:00
+Doran: a little bit longer explanation to dive into my recent career and the relevancies to this role, if that makes sense, and then you just jump in and make it a conversation if you have any questions or something you want to dig down on. Okay.
+
+11:34:00 --> 11:34:02
+Wei Zhao: Sounds good.
+
+11:34:01 --> 11:34:07
+Doran: So my most recent role was at Cloudflare. Cloudflare
+
+11:34:07 --> 11:34:19
+Doran: had had about 5,500 people, but they went through a huge 20% layoff where they cut the entire marketing org, except for maybe 5 people
+
+11:34:19 --> 11:34:28
+Doran: And so I got swept up in that. And at Cloudflare, my role was over the last year
+
+11:34:28 --> 11:34:37
+Doran: AI enablement, marketing operations lead. It meant that I kind of wore three different hats. I did
+
+11:34:37 --> 11:34:43
+Doran: The builder hat, the strategy hat, and the enablement teaching hat
+
+11:34:43 --> 11:34:47
+Doran: As a builder, I would take on
+
+11:34:47 --> 11:34:49
+Doran: Or actually, let me go back a step
+
+11:34:49 --> 11:34:54
+Doran: That I think is pretty relevant to all this, too, which is how the role came about
+
+11:34:54 --> 11:35:08
+Doran: I invented the role. I pitched the role. Before this role existed, it was me in a regular growth marketing capacity, focusing on, like, A-B tests, landing pages, and
+
+11:35:08 --> 11:35:22
+Doran: conversion optimization, where I worked at Salesforce and stuff like that to integrate into the web page with Marketo campaigns. And then it was all about optimizing that web funnel. And I'll dig into that more in a second.
+
+11:35:22 --> 11:35:26
+Doran: But that was my history as a marketer
+
+11:35:26 --> 11:35:31
+Doran: at Cloudflare, and with a lot of companies, I'm sure many of your candidates are like this as well, too
+
+11:35:31 --> 11:35:35
+Doran: it's an engineer mindset coming to AI
+
+11:35:35 --> 11:35:50
+Doran: not a marketing first mindset. And so at Cloudflare, when leadership was saying, hey, we all need to learn AI. We all need to integrate AI workflows and automations into our marketing everyday tasks.
+
+11:35:50 --> 11:35:55
+Doran: It was the engineering team coming down and saying
+
+11:35:55 --> 11:36:10
+Doran: Just jargon that went over all of my colleagues' heads rag this, Claude that. You got to do this loop and whatever. Stuff that in these meetings and these training sessions, you could see my colleagues eyes glazing over because they're not the most
+
+11:36:11 --> 11:36:17
+Doran: As many marketers, there might be tech savvy, but they're not tech forward engineering speak.
+
+11:36:18 --> 11:36:24
+Doran: And so I pitched to my VP. He was two levels up at the time
+
+11:36:24 --> 11:36:26
+Doran: the need for this role
+
+11:36:26 --> 11:36:40
+Doran: I felt like in order for AI enablement to happen for building AI Agentic workflows to actually happen and take over some of these mundane tasks of marketers. We needed a marketer mindset
+
+11:36:40 --> 11:36:53
+Doran: And within the first 5 minutes, he said, you had me at hello, where were you 3 months ago? Let's do it. And I started reporting to the VP of Global Marketing, got a promotion, and led that initiative
+
+11:36:53 --> 11:36:56
+Doran: Anyway, so that's the story behind it.
+
+11:36:56 --> 11:37:02
+Doran: But at that role, like I said, I wore the 3 hats. I built any
+
+11:37:02 --> 11:37:13
+Doran: high touch, high visibility workflow or homegrown app or automation. Maybe it's like AI in a SaaS tool that I created
+
+11:37:13 --> 11:37:23
+Doran: That integrates with, like, Salesforce or something for campaign management, optimization, anything like that that was high level, high impact, I built
+
+11:37:23 --> 11:37:36
+Doran: If it was more mid-range or like it impacted a team of 20 or so users, then I would have one of my power users build it and I would consult on the project.
+
+11:37:36 --> 11:37:43
+Doran: teaching them along the way, and helping them create that framework or Agentic workflow, whatever it was going to be for their solution.
+
+11:37:43 --> 11:37:46
+Doran: And that was my builder hat of that role.
+
+11:37:46 --> 11:37:58
+Doran: The second part, like I said, was enablement. I would run training sessions to really upskill all of marketing up to 200 people were part of the global marketing org
+
+11:37:58 --> 11:38:10
+Doran: So I would have online training sessions with up to 200 attendees. I would do in-person, like, hackathons. I would do office hours. I would create follow-up materials and
+
+11:38:10 --> 11:38:17
+Doran: slides and PDFs and presentations for those. I kind of felt like a YouTuber, where I was like
+
+11:38:17 --> 11:38:18
+Doran: selling
+
+11:38:18 --> 11:38:22
+Doran: this AI enablement to all of my peers.
+
+11:38:22 --> 11:38:37
+Doran: And then the third part was the strategy. So the role didn't exist before me. And I worked with my VP as well as some other VPs in the marketing org to create the AI enablement strategy and rollout strategy
+
+11:38:37 --> 11:38:52
+Doran: What does… and that means like, what does a AI native workforce look like instead of a content writer? Is he or she an orchestrator that's running these agents to be the human in the loop of that flow
+
+11:38:52 --> 11:38:57
+Doran: You know, how does the human fit into that role if we could build marketing from the ground up
+
+11:38:57 --> 11:39:07
+Doran: And then there was a listening tour I did at the very beginning. Talked to 50 different marketers all across product, demand gen, campaigns
+
+11:39:07 --> 11:39:18
+Doran: Everybody in marketing. And hey, what are your pain points? Where's the low hanging fruit? Where do you see AI could fit into this? Where does automation fit into it? Because it's not always an AI solution.
+
+11:39:18 --> 11:39:21
+Doran: And then all that built a roadmap
+
+11:39:21 --> 11:39:28
+Doran: That was part of our AI enablement and enrollment. I'm sorry, enablement and strategy for Cloudflare.
+
+11:39:28 --> 11:39:34
+Doran: Sorry, that was a long answer, but that was the most recent, I think, relevant to this role that you'd want to hear about
+
+11:39:33 --> 11:39:41
+Wei Zhao: Yeah, thank you so much. I'm very curious to hear some examples of the AI workflow that you built.
+
+11:39:40 --> 11:39:46
+Doran: Yeah, any touch point in particular you're curious about?
+
+11:39:45 --> 11:39:51
+Wei Zhao: What's the flow that you build that you're most proud of or have the biggest business impact?
+
+11:39:52 --> 11:40:06
+Doran: I would say two. One was, I don't know, I guess there's three. There was a flow I built that it doesn't sound as impactful, but when you multiply it over the thousands of people at Cloudflare, it's
+
+11:40:06 --> 11:40:11
+Doran: Insanely money-saving, impactful, and had big KPIs tied to it, which was
+
+11:40:12 --> 11:40:16
+Doran: Slide presentations as a whole
+
+11:40:16 --> 11:40:33
+Doran: whole Agentic workflow tied into a homegrown app that I built that built slides with our marketing and brand guidelines for the sales enablement, because that's a big part of what they're doing in product marketing and the sales
+
+11:40:33 --> 11:40:37
+Doran: Reps, for internal team members.
+
+11:40:37 --> 11:40:41
+Doran: For everybody to use this tool where you can just feed it like a
+
+11:40:41 --> 11:40:46
+Doran: high-level rubric, and then it would create assets for your slides, fill it all out
+
+11:40:46 --> 11:40:53
+Doran: and just run it by you for sign-off, and create your entire slide deck in minutes. Again, it doesn't sound like the most
+
+11:40:54 --> 11:41:04
+Doran: tech-savvy thing on the surface, but under the hood, it was integrated with our design system. It was creating images and assets in the slides.
+
+11:41:04 --> 11:41:10
+Doran: I was following our brand guidelines. I was doing research of our different wiki content
+
+11:41:10 --> 11:41:18
+Doran: Internally to help create content for the slides. There's a lot going on. The second one was, like, a demand gen
+
+11:41:18 --> 11:41:24
+Doran: PPC campaign analysis tool that I was pretty proud of because
+
+11:41:24 --> 11:41:29
+Doran: That was very transparent in its KPIs as well, too. Because you could easily show
+
+11:41:29 --> 11:41:38
+Doran: This campaign should be cut, this campaign should be optimized for this area, and it could create, you know, different variants of A-B tests
+
+11:41:38 --> 11:41:41
+Doran: And then the third one was
+
+11:41:41 --> 11:41:50
+Doran: An entire workflow to do landing page creation from start to finish in our third party CMS.
+
+11:41:50 --> 11:41:55
+Doran: From SEO research to content writing.
+
+11:41:55 --> 11:42:00
+Doran: Human and loop sign off to then actual page development with our CMS, which
+
+11:42:00 --> 11:42:13
+Doran: was contentful, and it had all this buggy stuff to it, so it wasn't the most straightforward thing. But we built an MCP around that to plug in and solve all those issues. So I would say those are my probably
+
+11:42:13 --> 11:42:16
+Doran: most impactful from an ROI standpoint.
+
+11:42:16 --> 11:42:26
+Wei Zhao: Can you tell me a little bit more about that last one that SEO content publishing project? Walk me through what
+
+11:42:26 --> 11:42:29
+Wei Zhao: input that you take, and then
+
+11:42:29 --> 11:42:32
+Wei Zhao: walk me through the entire workflow
+
+11:42:31 --> 11:42:34
+Doran: Yeah, so agents
+
+11:42:35 --> 11:42:37
+Doran: I've always built as
+
+11:42:37 --> 11:42:41
+Doran: Thinking them as a specialist.
+
+11:42:41 --> 11:42:43
+Doran: Like, if I hired a team of people
+
+11:42:43 --> 11:42:52
+Doran: to create a webpage, I would break that job up into different people. So each one's a specialist. Each agent was a specialist in that handoff.
+
+11:42:43 --> 11:42:52
+Wei Zhao: -H
+
+11:42:52 --> 11:43:02
+Doran: So it would be first SEO agent to look at Google trends, look at our SEO tool of
+
+11:43:02 --> 11:43:04
+Doran: What was it called?
+
+11:43:04 --> 11:43:14
+Doran: I forgot our in-house SEO tool. Just do analysis of different keywords and where we're getting hits, and where we're getting traffic and conversion points from.
+
+11:43:14 --> 11:43:17
+Doran: To figure out, like, what's a good topic
+
+11:43:17 --> 11:43:19
+Doran: Propose those topics to the human
+
+11:43:19 --> 11:43:21
+Doran: Human picks one
+
+11:43:21 --> 11:43:36
+Doran: It would do research of our existing content throughout our entire site, scrape it and store it into memory. It would do research of competitors because there's a lot of thought articles from different Cloudflare competitors like Palo Alto Networks and
+
+11:43:36 --> 11:43:39
+Doran: Things like that.
+
+11:43:39 --> 11:43:52
+Doran: And figure out what they're writing about for those things, all of it to help it come up with like what would be a high ranking, engaging article for this content or subject matter for this content.
+
+11:43:52 --> 11:44:04
+Doran: So all those different research agents are handing off to each other, presenting the final synopsis to the human. Then the human is picking one of those topics. Then it's writing the content. We have like a whole
+
+11:44:04 --> 11:44:14
+Doran: Internal developer documentation like behind the scenes documentation about our products and services. So it could factually represent that information.
+
+11:44:14 --> 11:44:23
+Doran: Then write that as a draft. Then after the whole content had been approved, which is a couple like steps there.
+
+11:44:23 --> 11:44:29
+Doran: bring it over to our WebCMS portal through the MCP connection with Contentful that we built
+
+11:44:23 --> 11:44:29
+Wei Zhao: -H
+
+11:44:29 --> 11:44:44
+Doran: To actually plug it in to our standardized template. I shouldn't say template, but more or less that's kind of what it was. Standardized templatization of what the site expected content to look like, like, where does if it's a blog post, the right hand column is a list of
+
+11:44:45 --> 11:44:55
+Doran: In recent news and events, the top part is a summary. TLDR of the article, you know, stuff like that to put it in the different elements and the different components. And literally build the entire thing from scratch.
+
+11:44:55 --> 11:45:02
+Wei Zhao: Hmm, got it. Who are the key stakeholders for this project? And then what are the
+
+11:45:02 --> 11:45:06
+Wei Zhao: systems and tools that you used
+
+11:45:07 --> 11:45:18
+Doran: Key stakeholders for something like that would have been… well, like contributor role of the blog writers and content writers for the website, and then
+
+11:45:19 --> 11:45:26
+Doran: Probably from like a driver sign-off role. I guess the key stakeholders would have been our director of web content and growth.
+
+11:45:26 --> 11:45:30
+Doran: as well as the lead for SEO.
+
+11:45:30 --> 11:45:33
+Doran: all of them would sign off on the content
+
+11:45:30 --> 11:45:33
+Wei Zhao: -H
+
+11:45:33 --> 11:45:34
+Doran: And then
+
+11:45:34 --> 11:45:48
+Doran: tools, we were like most companies, you know, there's a lot of red tape. You just are in a certain, you're Microsoft or Google or whatever. Cloudflare is a Google house. Personally, I'm Claude and I use n8n and other stacks like that
+
+11:45:48 --> 11:45:59
+Doran: on my own side projects. But Cloudflare was all Gemini. And so we were using that for all of the the building and the workflows. And then we also use
+
+11:45:51 --> 11:45:53
+Wei Zhao: Hmm.
+
+11:45:59 --> 11:46:04
+Doran: You've probably heard of cloud code, but there's also a ripoff called open code.
+
+11:46:04 --> 11:46:09
+Doran: And we had a backdoor with them, so we built off of that for our Agentic workflow maintenance and running
+
+11:46:08 --> 11:46:13
+Wei Zhao: I see. Who was the original requester of this agent build?
+
+11:46:13 --> 11:46:22
+Doran: A lot of projects that I did were part of that strategy hat. It wasn't requesters usually in the beginning.
+
+11:46:22 --> 11:46:26
+Doran: It would be me finding pain points, low-hanging fruit.
+
+11:46:26 --> 11:46:35
+Doran: Creating a roadmap of my entire AI enablement workflow for myself and my power users that I handed off work to. They kind of dotted line to me
+
+11:46:35 --> 11:46:45
+Doran: To say this is the projects we're working on for Q1, Q2, and so forth. And so since this was a huge impact from an ROI standpoint of time savings
+
+11:46:45 --> 11:46:57
+Doran: And very quantifiable on, like, the amount of hours I could say we spend this much hours on research, normally this much hours on content writing, this much hours on web producers, building the pages.
+
+11:46:57 --> 11:47:00
+Doran: So it became a very obvious low-hanging fruit
+
+11:47:00 --> 11:47:01
+Wei Zhao: Hmm.
+
+11:47:00 --> 11:47:09
+Doran: Project that I just assigned an entire workflow not sign off. The entire strategy was something I signed off with my VPs on.
+
+11:47:09 --> 11:47:12
+Wei Zhao: So there are
+
+11:47:12 --> 11:47:18
+Wei Zhao: Out of the box softwares out there that does exactly this, this did you reference those tools
+
+11:47:18 --> 11:47:23
+Doran: Yeah, but the problem with Cloudflare is because they're a cybersecurity company
+
+11:47:18 --> 11:47:23
+Wei Zhao: -H
+
+11:47:23 --> 11:47:38
+Doran: We have so much red tape, like, I would do vendor relations from an operations standpoint for mops and it would take me like three months to onboard a new software from Google, which we already use for a vendor
+
+11:47:38 --> 11:47:48
+Doran: I have to go through all this red tape of legal and other stuff internally because of all of our security measures. So
+
+11:47:48 --> 11:47:54
+Doran: I was stuck with these handcuffs of always having to build stuff basically from scratch, from the ground up.
+
+11:47:54 --> 11:48:02
+Doran: And then I would just reference, you know best practices or do research or have my agents do research for the best ways to do those things.
+
+11:48:02 --> 11:48:12
+Wei Zhao: Got it. Walk me through your strategy process and how do you source your projects and evaluate them and prioritize them
+
+11:48:13 --> 11:48:24
+Doran: So I was mentioning before, like the listening tour I did. I spoke to 50 different marketers all across marketing at different capacities, product marketing, solution marketing, sales enablement
+
+11:48:21 --> 11:48:23
+Wei Zhao: Yeah.
+
+11:48:24 --> 11:48:27
+Doran: Our chat bot team
+
+11:48:27 --> 11:48:37
+Doran: Everybody and that was an arduous task of me doing these 30 minute one-on-ones with these individuals to figure out
+
+11:48:37 --> 11:48:45
+Doran: I mean, I'm a marketer by trade. I understand all these different touch points, and I've worked with these people and worked on a lot of these projects myself that they had.
+
+11:48:45 --> 11:48:47
+Doran: But I want to hit there
+
+11:48:47 --> 11:49:02
+Doran: SME, their subject matter expertise angle on it. And so it was me just digging into, hey, what are your pain points? What is your workflow like? Or do you feel like you spent X amount of hours and time trying to tie different KPIs to their tasks of their everyday workflows
+
+11:49:03 --> 11:49:08
+Doran: Then using that
+
+11:49:08 --> 11:49:10
+Doran: I didn't have my own like
+
+11:49:10 --> 11:49:15
+Doran: Monday.com or something like that to project manage my own stuff.
+
+11:49:15 --> 11:49:29
+Doran: I was left on my own devices, so I built a homegrown SaaS tool to manage all my project, fed everything to AI to prioritize my projects, created a presentation for my VPs, road showed it to them
+
+11:49:29 --> 11:49:33
+Doran: on why these projects are the top projects, and then built the entire roadmap.
+
+11:49:34 --> 11:49:42
+Wei Zhao: Got it. So out of all the projects that you worked on, how do you report back impact?
+
+11:49:42 --> 11:49:46
+Doran: So that homegrown SaaS
+
+11:49:42 --> 11:49:46
+Wei Zhao: -H
+
+11:49:46 --> 11:49:55
+Doran: That was kind of like a monday.com for project management was how I stored everything myself and my other power users that dotted line to me.
+
+11:49:49 --> 11:49:50
+Wei Zhao: Yep.
+
+11:49:54 --> 11:49:56
+Wei Zhao: Yeah.
+
+11:49:55 --> 11:50:05
+Doran: We're done, and so track KPIs like hours saved or estimated impact of internal or external, meaning
+
+11:50:05 --> 11:50:15
+Doran: If it's a workflow that has an external impact to our customers, that would be valued higher as a weighted score versus internal.
+
+11:50:15 --> 11:50:20
+Doran: Just to try to give an ROI to each project as a score point.
+
+11:50:20 --> 11:50:26
+Doran: And then present that in a monthly, like, QBR to all of my leadership team
+
+11:50:26 --> 11:50:36
+Wei Zhao: Got it. And then on that SEO project, SEO content publishing project, what were the KPIs that you presented? Is that also around our saved
+
+11:50:36 --> 11:50:49
+Doran: Yeah, I mean, it had a lot of different KPIs because I had so many touch points, but the main one that my VPs cared about, and I think most VPs are always going to care about is trying to tie a dollar impact to that.
+
+11:50:40 --> 11:50:41
+Wei Zhao: Yeah.
+
+11:50:48 --> 11:50:50
+Wei Zhao: Yep.
+
+11:50:49 --> 11:50:55
+Doran: They went away to apples to apples, everything, right? So I would take
+
+11:50:55 --> 11:51:09
+Doran: hours impact as the main KPI. I don't have salary information of all the people's jobs I touch, but they do. And then they can make the assessment based off that. But there's a lot of, like, sub KPIs that fed into that, like how many pages I could produce
+
+11:51:09 --> 11:51:19
+Doran: I was… Cloudflare is a very content-forward, especially when we got into an AEO strategy world where we were trying to be more content forward as a growth lever
+
+11:51:09 --> 11:51:19
+Wei Zhao: -H
+
+11:51:19 --> 11:51:23
+Doran: So we would probably produce maybe
+
+11:51:23 --> 11:51:29
+Doran: 10 blog articles a month, and then I could infinitely
+
+11:51:29 --> 11:51:35
+Doran: X that to, you know 100 or whatever. So all those things are kind of like these minute other
+
+11:51:35 --> 11:51:40
+Doran: asterisks on top of all those KPIs that I could sell to them.
+
+11:51:39 --> 11:51:49
+Wei Zhao: Yeah, by the time you left, I know you left maybe a couple months ago, by the time you left, how many new articles were published through this agent?
+
+11:51:44 --> 11:51:45
+Doran: Yeah
+
+11:51:49 --> 11:52:00
+Doran: Yeah, so that's kind of the funny thing about the layoffs. We kind of AI ourselves out of a job. So they cut the entire marketing department except for about five or six people
+
+11:51:49 --> 11:52:00
+Wei Zhao: -H
+
+11:52:00 --> 11:52:11
+Doran: So I didn't really get… we built things, and then they put them in this. We tested them and we built like a hand, you know, ran them a handful of times to
+
+11:52:10 --> 11:52:12
+Wei Zhao: Hmm.
+
+11:52:11 --> 11:52:13
+Doran: Put water through the pipes.
+
+11:52:13 --> 11:52:16
+Doran: Then we had to hand them all off to this AI team
+
+11:52:16 --> 11:52:21
+Doran: that they magically created like the last month or so is all very fishy.
+
+11:52:21 --> 11:52:26
+Doran: And then we didn't ever get to put them 100% in production.
+
+11:52:26 --> 11:52:32
+Doran: So we kind of just AI ourselves out of the marketing jobs that we had.
+
+11:52:32 --> 11:52:43
+Wei Zhao: Wow, that's a little I don't know, less strategic because you still need the human to drive strategy. You still need the human
+
+11:52:36 --> 11:52:37
+Doran: Yeah.
+
+11:52:41 --> 11:52:43
+Doran: Oh, I know.
+
+11:52:43 --> 11:52:46
+Wei Zhao: To provide feedback
+
+11:52:43 --> 11:52:52
+Doran: They brought in a new CMO that didn't jive well with the direction our previous CMO was going that started all this, and he kind of just
+
+11:52:53 --> 11:52:58
+Doran: Cut everything. It was a pretty high contention.
+
+11:52:57 --> 11:53:01
+Wei Zhao: So what's left there? The 5-6 marketers
+
+11:53:01 --> 11:53:11
+Doran: I don't know, it's all rumors of who they are and what their roles are. I don't really know. I've just heard names of them
+
+11:53:11 --> 11:53:13
+Wei Zhao: No worries.
+
+11:53:13 --> 11:53:28
+Wei Zhao: So what will be success look like? Or what would you require to have a successful or big impact if you join Harvey that you need from me or the future head of mobs that this role sits on
+
+11:53:28 --> 11:53:34
+Doran: I mean, I think ideally there's not a lot of constraints on tools.
+
+11:53:34 --> 11:53:39
+Doran: I hate reinventing the wheel when there's already an obvious answer for that
+
+11:53:36 --> 11:53:37
+Wei Zhao: Yeah.
+
+11:53:39 --> 11:53:52
+Doran: So hopefully there aren't… obviously, there's certain things you have to do in an operational role and budget role, but, you know, all these things have costs that can be measured against each other. So
+
+11:53:52 --> 11:53:59
+Doran: Hopefully, tooling isn't a big hurdle, and I'd say that's a big key to success. And then
+
+11:53:59 --> 11:54:06
+Doran: The strategic mindset that I brought to Cloudflare was I'm only one person.
+
+11:54:07 --> 11:54:10
+Doran: And sure, I can impact
+
+11:54:10 --> 11:54:19
+Doran: All 200 marketers to a certain degree, but if I can find power users that they have 90% of their job is their regular job.
+
+11:54:10 --> 11:54:19
+Wei Zhao: -H
+
+11:54:19 --> 11:54:29
+Doran: But 10% is this one side AI project for their team of 20 people or whatever. Then that's a way to multiply me and multiply my impact
+
+11:54:29 --> 11:54:35
+Doran: teach, you know, a person how to fish instead of just coming to one of my training sessions.
+
+11:54:35 --> 11:54:40
+Doran: I think those are the biggest impacts that can really make this role successful.
+
+11:54:35 --> 11:54:36
+Wei Zhao: Yeah.
+
+11:54:39 --> 11:54:44
+Wei Zhao: Makes sense. How did you recruit your power users at Cloudflare?
+
+11:54:46 --> 11:54:47
+Doran: I mean
+
+11:54:47 --> 11:55:00
+Doran: kind of just feel things out because you're doing training sessions, and people get it or don't get it. They're asking questions. I did a lot of interactive things in my training sessions. I did hackathons
+
+11:55:00 --> 11:55:16
+Doran: are people that build stuff. We did, like, an in-office. I think our office is by you guys in San Francisco hackathon where there was like 30 something people, and everybody's still building different projects. And so you kind of just see who's taking to it and more ine
+
+11:55:16 --> 11:55:20
+Doran: Plus, Cloudflare is kind of the Wild West at first
+
+11:55:16 --> 11:55:17
+Wei Zhao: Yeah.
+
+11:55:20 --> 11:55:23
+Doran: they gave everybody all these tools
+
+11:55:22 --> 11:55:24
+Wei Zhao: Hmm.
+
+11:55:23 --> 11:55:26
+Doran: And access to everything.
+
+11:55:26 --> 11:55:38
+Doran: from a sales rep to a marketer to a VP, everyone had access to building agents, basically, without like they were wielding nuclear bombs without knowing what they had
+
+11:55:38 --> 11:55:41
+Doran: But it created this like
+
+11:55:41 --> 11:55:43
+Doran: Environment where
+
+11:55:43 --> 11:55:55
+Doran: People were encouraged to experiment. And so there were a lot of early adopters like myself that I already knew of through different channels and would recruit them from that. But I'd have to get sign off from their VPs usually.
+
+11:55:55 --> 11:56:07
+Wei Zhao: Yeah. Another question, how do you make sure you're compliant to security, any type of guardrails, which teams do you work with to make sure that's
+
+11:56:01 --> 11:56:03
+Doran: Oh, yeah.
+
+11:56:07 --> 11:56:12
+Wei Zhao: enabled and embedded across all your power users as well.
+
+11:56:11 --> 11:56:23
+Doran: Yeah, that's a good question. And I would go back to my answer also pairs with a key to success that you're asking earlier to make this successful.
+
+11:56:23 --> 11:56:39
+Doran: You need to really not reinvent the wheel and create certain safeguards in an environment that everything runs through holistically. So at Cloudflare, I created repos. I created reusable skills, reusable agents. I didn't want people
+
+11:56:30 --> 11:56:32
+Wei Zhao: Yeah.
+
+11:56:30 --> 11:56:32
+Wei Zhao: -H
+
+11:56:39 --> 11:56:46
+Doran: And rebuilding something and wasting time and effort and money and tokens that I already had perfected, but also
+
+11:56:46 --> 11:57:02
+Doran: I could build things that had safeguards in place, like whenever the blah, blah blah agent runs, it already pulls from my repo the security protocols agent that our engineering team has already signed off on, that understands all of our engineering standards.
+
+11:57:03 --> 11:57:14
+Doran: When you know Jennifer or Tim are building whatever they're building, they're pulling only from my repo, my agents to build things and my agents are
+
+11:57:14 --> 11:57:23
+Doran: tied into other security agents to cross-check those to follow the engineering standards that the engineering team has signed off on. So it's all like this collaborative spider web
+
+11:57:23 --> 11:57:31
+Doran: If you put it all together, but it only, you know, in one spot for the for the users. But it only works if
+
+11:57:31 --> 11:57:38
+Doran: you're building things people want to use, making it easier for them, right? Like, if I build an agent
+
+11:57:38 --> 11:57:41
+Doran: Look at something I did
+
+11:57:41 --> 11:57:48
+Doran: An agent to build agents is a silly one, but a simple one. People want to hear the buzzword agents, and they're like, I want an agent for whatever.
+
+11:57:48 --> 11:57:51
+Doran: And they could just go to OpenClaw
+
+11:57:51 --> 11:57:53
+Doran: And start building stuff
+
+11:57:53 --> 11:58:05
+Doran: because they had all the access. But if they knew that my repo had an agent to build agents, then they would use that. It would be simpler than them just going off and doing it on their own. So you have to incentivize people as well
+
+11:58:04 --> 11:58:13
+Wei Zhao: Yeah, that makes sense. Harvey very much has similar culture, which is everyone is using AI, building their own
+
+11:58:13 --> 11:58:27
+Wei Zhao: dashboards, sometimes agent. And since last quarter, I want to say, since I joined, our IT team start putting guardrails and putting up more enablement sessions to educate the entire team, and
+
+11:58:27 --> 11:58:46
+Wei Zhao: Also took away some of the cloud code. We use cloud. We actually have everything, because we're OpenAI all the foundation models are our partners, too. So Harvey being AI native, we are very encouraging to everyone to enable everyone to use AI to code, to build agents, whatnot
+
+11:58:34 --> 11:58:36
+Doran: Sure.
+
+11:58:46 --> 11:58:48
+Wei Zhao: But more and more it becomes
+
+11:58:49 --> 11:58:55
+Wei Zhao: Not necessarily a risk, but unregulated, motivated to use AI
+
+11:58:52 --> 11:58:55
+Doran: Yeah, it's the Wild West.
+
+11:58:55 --> 11:59:04
+Wei Zhao: Yeah, which is why this digital becomes more important. So this role will work really, really closely with IT engineering team
+
+11:59:03 --> 11:59:05
+Doran: Yeah.
+
+11:59:04 --> 11:59:14
+Wei Zhao: Our engineering team as well, supporting stakeholders, of course, marketing all the way to go to market sales. I know we only have 1 min left. I want to make sure to answer any question that you have
+
+11:59:14 --> 11:59:27
+Doran: No, I would say you're right. I think you gotta have strong warehouses to gate things. You got to collaborate with engineering, because otherwise it's a Wild West. You have people wasting time, wasting money, rebuilding and reinventing the wheel.
+
+11:59:26 --> 11:59:28
+Wei Zhao: Yeah.
+
+11:59:27 --> 11:59:40
+Doran: But also creating security risks and tons of tech debt that needs to be maintained. Like, awesome, you made this agent that does whatever this dashboard you need. But are you going to maintain it? Who's going to ensure it has data accuracy is connected to the right
+
+11:59:40 --> 11:59:45
+Doran: tooling systems as change changes happen throughout, you know mops as they always do
+
+11:59:39 --> 11:59:41
+Wei Zhao: Yeah.
+
+11:59:45 --> 11:59:47
+Doran: Anyways.
+
+11:59:46 --> 11:59:48
+Wei Zhao: Yep.
+
+11:59:47 --> 12:00:02
+Doran: I don't think I have any questions specific about the role itself, more about like the growth of it. I know that I heard from the recruiter that it's going to report through you through demand gen, because things are like in this transition period since you're more new
+
+11:59:55 --> 11:59:56
+Wei Zhao: Yeah.
+
+12:00:02 --> 12:00:18
+Doran: And then it's going to shift to head of something. And so I guess it's checking that what I've said about the strategy and growth of this role, about the multiplication of its powers to other users so that it can become successful. Does that resonate with you
+
+12:00:08 --> 12:00:09
+Wei Zhao: Yeah.
+
+12:00:18 --> 12:00:21
+Doran: Is that what you're seeing for the future?
+
+12:00:19 --> 12:00:36
+Wei Zhao: Yeah, yeah, absolutely. So this role will report into the head of marketing operations and strategy. So basically that function sits under demand gen as well. However, that function supports entire marketing and tie that connection between marketing and sales as well
+
+12:00:36 --> 12:00:48
+Wei Zhao: Reporting structure put aside, this role will have a direct reporting structure into the future head of marketing operations, which I'm hiring for. And so
+
+12:00:48 --> 12:01:04
+Wei Zhao: With that line of report, naturally, this role will be strategic and be able to support the entire marketing organizations and be able to… which is why prioritizing projects is going to be very important, because we need to look at all outcome RIs from every, you know, project that we put our resources into
+
+12:01:03 --> 12:01:04
+Doran: Yeah.
+
+12:01:04 --> 12:01:16
+Wei Zhao: So long story short, we are Harvey is growing really, really fast. We're hiring, gosh, I don't even know 20, probably 20 plus roles on the marketing alone. So the team today
+
+12:01:13 --> 12:01:15
+Doran: Wow.
+
+12:01:16 --> 12:01:25
+Wei Zhao: Like a month later, gonna look very different. But what we do know is this is a very critical hire and will support the entire marketing team.
+
+12:01:18 --> 12:01:20
+Doran: Yeah, yeah.
+
+12:01:25 --> 12:01:31
+Doran: And I'm sorry, if I can squeeze in one more question. I don't know if I'm butting into your lunch or you have another call, though.
+
+12:01:30 --> 12:01:33
+Wei Zhao: No worries, I can stay on for a few more minutes.
+
+12:01:33 --> 12:01:38
+Doran: So then, considering all of that and the strategy of the role
+
+12:01:39 --> 12:01:40
+Doran: Are there
+
+12:01:42 --> 12:01:44
+Doran: The only
+
+12:01:44 --> 12:01:49
+Doran: flag or concern for me, or hurdle for me, assuming we all feel like it's a fit
+
+12:01:49 --> 12:01:52
+Doran: And you're sold on my capabilities here is
+
+12:01:52 --> 12:01:58
+Doran: That it's slightly less of a senior role than what I was
+
+12:01:58 --> 12:02:13
+Doran: already doing right? Like, if I was still at Cloudflare, it would hypothetically be a bit of a step down because I was kind of at a head level or a director level. Do you guys know or see if this role? It seems confined to
+
+12:02:14 --> 12:02:22
+Doran: look at it from a strategy of demand gen and marketing operations and not like I touch sales, I touched
+
+12:02:22 --> 12:02:27
+Doran: All the parts of the lead funnel and to product marketing and things like that.
+
+12:02:22 --> 12:02:27
+Wei Zhao: -H
+
+12:02:27 --> 12:02:31
+Doran: Do you know if that type of viewpoint is
+
+12:02:31 --> 12:02:36
+Doran: flexible or shared in what this might be, or that's probably a question for later.
+
+12:02:36 --> 12:02:50
+Wei Zhao: Like I said, how the marketing team look like today and everyone's job and responsibility today will look very different six months later. And the reality that I do know and can confirm is that we are growing really fast
+
+12:02:40 --> 12:02:41
+Doran: Sure.
+
+12:02:50 --> 12:02:57
+Wei Zhao: 4 months ago, when I joined the company, I had 3 people on the team, 3-4 people on the team, but today
+
+12:02:57 --> 12:03:07
+Wei Zhao: in-seat people plus open headcount. We're counting about 12 people on my team. So that's how fast the company is growing.
+
+12:03:02 --> 12:03:04
+Doran: Oh, wow, that's
+
+12:03:05 --> 12:03:09
+Doran: So who knows where this role will lie? I mean, I'm not looking for
+
+12:03:08 --> 12:03:24
+Wei Zhao: I mean, yeah, it depends on, yeah, the impact that we can drive and the potential. I mean, I'm personally very bullish on we need to build our Agentic function supporting marketing and sales. Every team is feeling the same way
+
+12:03:09 --> 12:03:11
+Doran: direct reports
+
+12:03:24 --> 12:03:25
+Doran: Yeah.
+
+12:03:24 --> 12:03:31
+Wei Zhao: In the future, I really cannot speak to the future, but I do know this is very critical, and we can create big impact.
+
+12:03:31 --> 12:03:32
+Wei Zhao: And
+
+12:03:32 --> 12:03:47
+Wei Zhao: I hope we are not limiting our viewpoint to only what's on the job description today. It's very much a strategic, but also hands-on ic for now. But you know I do hope that we can grow this function
+
+12:03:38 --> 12:03:40
+Doran: Okay, perfect.
+
+12:03:41 --> 12:03:43
+Doran: Perfect.
+
+12:03:43 --> 12:03:44
+Doran: Yeah.
+
+12:03:47 --> 12:04:03
+Doran: Okay, well, I'm super interested. I don't want to sell it or come off as if I'm looking for a role that as a director, head title necessarily. I don't get stuck on things like that. I'm just more about the responsibilities and the impact, and especially with this company like Harvey, where
+
+12:03:55 --> 12:03:56
+Wei Zhao: Yeah.
+
+12:04:04 --> 12:04:17
+Doran: You want the success of the role to be the success of the company so that it can have that bigger impact. And it's something new, you know you want to do it right from the start. So glad to know that you see it that way as well, too.
+
+12:04:08 --> 12:04:10
+Wei Zhao: Yeah.
+
+12:04:15 --> 12:04:16
+Wei Zhao: Yeah
+
+12:04:17 --> 12:04:32
+Wei Zhao: Yeah, absolutely. Harvey is a very fast-moving company, high reward, and we recognize folks across the board. So if you bring big impact to the company, you will be recognized. And then if we can prove this is an area we need to continue
+
+12:04:32 --> 12:04:45
+Wei Zhao: to build literally my CMO asked me to tell her what do we need to like 3X our impact, our pipeline, for example, in the next two quarters, right? What else do we need in terms of systems, people, right? It's
+
+12:04:38 --> 12:04:40
+Doran: Yeah.
+
+12:04:45 --> 12:04:53
+Wei Zhao: Resource is less of a constraint, but we need to prove our impact. Hopefully, that help explain it.
+
+12:04:51 --> 12:04:52
+Doran: Yeah.
+
+12:04:52 --> 12:05:01
+Doran: You need that transparency. I understand. And do you know if the CMO shares your viewpoint? You made a comment earlier about the Cloudflare transition.
+
+12:04:53 --> 12:04:55
+Wei Zhao: Yeah
+
+12:05:01 --> 12:05:12
+Doran: of you can't just throw AI at something. It's human orchestration weaved into the AI role, because you still need that leadership tied into it
+
+12:05:04 --> 12:05:07
+Wei Zhao: Oh, oh yeah.
+
+12:05:10 --> 12:05:26
+Wei Zhao: Absolutely. I mean, Harvey is AI native company, and we are more than aware, more aware than maybe a lot of the not AI native companies that, sure, AI is how we build the company, but people in the loop
+
+12:05:26 --> 12:05:32
+Wei Zhao: annotation, you know, anything that people in the is so, so critical
+
+12:05:32 --> 12:05:40
+Wei Zhao: And driving that strategy is very, very critical, because we might push AI towards the wrong projects or
+
+12:05:38 --> 12:05:47
+Doran: Got it. Yeah. You want to 10 X your people but have them part of the strategy and the leadership of the execution and the forward thinking of where it goes.
+
+12:05:40 --> 12:05:42
+Wei Zhao: Yeah, so
+
+12:05:46 --> 12:05:47
+Wei Zhao: Yeah
+
+12:05:47 --> 12:05:58
+Wei Zhao: Yeah, yeah, I think that might be one unique differences between the AI native companies versus some of the more traditional companies about trying to catch up and be AI, you know, first
+
+12:05:47 --> 12:05:49
+Doran: Okay.
+
+12:05:58 --> 12:06:00
+Wei Zhao: Yeah.
+
+12:06:00 --> 12:06:05
+Doran: Yeah, that's good. Okay, well, I'm sorry to take more of your time, but I appreciate the extra information.
+
+12:06:05 --> 12:06:10
+Wei Zhao: Yeah, of course. Thank you so much for your time. I really appreciate our chat today.
+
+12:06:09 --> 12:06:12
+Doran: Thank you. Nice to meet you away, and I'll be in touch.
+
+12:06:09 --> 12:06:12
+Wei Zhao: Sounds good. Thank you. By
+
+12:06:13 --> 12:06:15
+Doran: Thanks, Michael.

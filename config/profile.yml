@@ -1,0 +1,155 @@
+# Who Doran is, what he will and won't take, and how he does offer math.
+# Edit this file to change what the agent looks for. Weights live in scoring.yml.
+
+identity:
+  name: Doran Waugh
+  email: dwaugh05@gmail.com
+  location: San Mateo, CA 94403
+  work_authorization: Authorized to work in the US for any employer
+  most_recent: Senior AI Marketing Operations and Enablement, Cloudflare (May 2025 - May 2026)
+
+# The role Doran is actually looking for, written out so the evaluator has a
+# definition to reason against rather than a keyword list to pattern-match.
+archetype:
+  summary: >-
+    AI enablement leadership inside a marketing or GTM organization. Owns the AI
+    strategy for the marketing org, architects agentic workflows that take the
+    groundwork off marketers while leaving strategy to humans, and upskills the
+    org into power users who build medium-impact projects themselves under a
+    dotted-line relationship. Blends three hats: builder, strategist, and
+    enablement teacher.
+
+  # Four real postings Doran rated highly, with four unrelated titles. This is
+  # why matching runs on description content and never on job title.
+  known_title_variants:
+    - AI Marketing Technologist Lead
+    - Director, AI GTM Strategy & Enablement
+    - Manager, Marketing AI Enablement
+    - Marketing Engineer
+    - GTM Engineer
+    - Marketing AI Lead
+    - Head of AI Enablement
+    - AI Enablement Manager
+    - Marketing Technology Lead
+    - AI Operations Lead
+
+  strong_positive_signals:
+    - Owns or defines the AI strategy for a marketing / GTM organization
+    - Builds agentic workflows and internal AI tools for marketers
+    - Trains, upskills, or enables non-technical marketing staff
+    - Explicit human-in-the-loop framing (AI does groundwork, human keeps strategy)
+    - Newly created role, greenfield, "first of its kind"
+    - Exposure to VP-level or CMO-level stakeholders
+    - Power-user / champion / dotted-line multiplication model
+    - "Reaches across the funnel: demand gen, PMM, web, content, sales enablement"
+    - Freedom to choose tooling
+    - MCP, API integrations, prompt systems, workflow automation
+
+  negative_signals:
+    - Pure software engineering or ML engineering role
+    - Requires production-grade CS fundamentals, distributed systems, or model training
+    - Quota-carrying sales role
+    - AI enablement that sits in IT / ITSM rather than marketing
+    - Execution-only seat with no strategy component
+    - AI used as branding with no budget, mandate, or real initiative
+    - Heavy procurement red tape that blocks tool adoption
+
+# Absolute deal-breakers. Checked before any scoring work happens.
+hard_gates:
+  # Broad scan only; targeted scan defaults to all-open.
+  # Widened from 14 to 30 on 2026-08-12. The 14-day window was excluding real
+  # matches: GitLab's "AI Transformation Owner, CRO" scored 4.84 -- second only
+  # to the ceiling anchor -- and was dropped for being 21 days old. Roles in this
+  # archetype are rare enough that a tight window costs more than it saves.
+  freshness_days: 30
+  max_commute_minutes: 60         # door-to-door from 94403
+  relocation_required: reject
+  # Doran wants more leadership but not a VP seat -- that is over-reach, and the
+  # JPMC anti-example fails here.
+  reject_title_bands:
+    - vp
+    - vice president
+    - svp
+    - senior vice president
+    - evp
+    - chief
+    - cmo
+    - cto
+    - ceo
+    - coo
+    - cro
+    - president
+    - board member
+  # Tested against the TOP of a posted band, so wide ranges like Harvey's
+  # $136k-$204k survive to be scored rather than being killed outright.
+  min_base_salary_max: 150000
+
+# Track B (growth marketing, the backup list) targets a narrower seniority band
+# than track A: Senior Manager through Director, roles Doran clears comfortably
+# rather than stretches into. He chose this deliberately on 2026-08-12.
+#
+# NOTE: this also excludes "Head of Growth" titles, which at a small startup are
+# sometimes Director-scoped. Delete the two "head" entries below if you want
+# those back.
+track_overrides:
+  growth_marketing:
+    reject_title_bands:
+      - vp
+      - vice president
+      - svp
+      - senior vice president
+      - evp
+      - chief
+      - cmo
+      - cto
+      - ceo
+      - coo
+      - cro
+      - president
+      - board member
+      - head of
+      - "head,"
+
+compensation:
+  target_tc_min: 200000
+  target_tc_max: 300000
+  base_floor: 170000
+  assumed_bonus_rate: 0.10        # unless the posting states its own number
+  equity_credit_low: 20000
+  equity_credit_mid: 35000
+  equity_credit_high: 50000
+  # Score the realistic offer point for 10+ years of experience -- 70% up the
+  # posted band -- not the midpoint.
+  offer_point_in_band: 0.70
+  ignore_benefits: true
+
+location:
+  home: San Mateo, CA 94403
+  preferred_commute_minutes: 40
+  remote_preferred: true
+  # Doran will not leave the Bay Area.
+  relocation: false
+  acceptable_remote_scopes:
+    - Remote - US
+    - Remote - United States
+    - Remote - Anywhere
+    - Remote - CA
+    - Remote - Bay Area
+
+leadership:
+  wants_direct_reports: false     # open to it, does not want it
+  prefers_dotted_line: true
+  max_title_band: director        # director or head is the ceiling he's comfortable with
+  # Title itself is NOT a requirement -- see scoring.yml dimension 3. Doran said
+  # plainly he does not get stuck on titles and stayed interested in an IC seat.
+  title_is_soft_preference: true
+
+review:
+  min_score_to_present: 4.0
+  max_results_per_report: 12
+  # Roles scoring between this floor and the threshold get a one-line mention
+  # under "Worth knowing about" rather than being dropped. Doran: "I still would
+  # want to see this job and not completely filtered out... I don't want it
+  # hidden from me completely." Hard-capped so it cannot become spray-and-pray.
+  worth_knowing_floor: 3.7
+  max_worth_knowing: 3

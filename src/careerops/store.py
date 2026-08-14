@@ -1,0 +1,558 @@
+"""SQLite persistence. This database -- not the conversation -- is the source of truth.
+
+It holds three things the agent could not otherwise remember between sessions:
+  1. What Doran has already been shown, so nothing is ever repeated.
+  2. What he thought of each posting, so the rubric can learn.
+  3. Sighting history per fingerprint, which is what exposes perpetual reposts.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Iterable, Iterator
+
+from . import config
+from .fingerprint import description_hash, fingerprint as compute_fingerprint
+from .models import (
+    STATE_EVALUATED,
+    STATE_NEW,
+    STATE_PRESENTED,
+    SUPPRESSED_STATES,
+    Posting,
+)
+from .normalize import now_iso
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS runs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mode            TEXT NOT NULL,
+    params          TEXT,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT,
+    raw_count       INTEGER DEFAULT 0,
+    prefilter_pass  INTEGER DEFAULT 0,
+    evaluated_count INTEGER DEFAULT 0,
+    presented_count INTEGER DEFAULT 0,
+    notes           TEXT
+);
+
+CREATE TABLE IF NOT EXISTS postings (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint      TEXT NOT NULL,
+    description_hash TEXT NOT NULL,
+    source_id        TEXT NOT NULL,
+    ats              TEXT NOT NULL,
+    source_slug      TEXT NOT NULL DEFAULT '',
+    company          TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    url              TEXT NOT NULL,
+    apply_url        TEXT,
+    location_raw     TEXT,
+    city             TEXT,
+    region           TEXT,
+    country          TEXT,
+    work_model       TEXT,
+    department       TEXT,
+    team             TEXT,
+    employment_type  TEXT,
+    salary_min       INTEGER,
+    salary_max       INTEGER,
+    salary_raw       TEXT,
+    equity_mentioned INTEGER DEFAULT 0,
+    bonus_mentioned  INTEGER DEFAULT 0,
+    published_at     TEXT,
+    date_confidence  TEXT DEFAULT 'none',
+    description      TEXT,
+    first_seen       TEXT NOT NULL,
+    last_seen        TEXT NOT NULL,
+    last_live_check  TEXT,
+    is_live          INTEGER DEFAULT 1,
+    state            TEXT NOT NULL DEFAULT 'new',
+    prefilter_reason TEXT,
+    UNIQUE (ats, source_slug, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_postings_fingerprint ON postings (fingerprint);
+CREATE INDEX IF NOT EXISTS idx_postings_state       ON postings (state);
+CREATE INDEX IF NOT EXISTS idx_postings_company     ON postings (company);
+
+CREATE TABLE IF NOT EXISTS sightings (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    posting_id            INTEGER NOT NULL REFERENCES postings (id),
+    run_id                INTEGER REFERENCES runs (id),
+    fingerprint           TEXT NOT NULL,
+    seen_at               TEXT NOT NULL,
+    published_at_reported TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sightings_fp ON sightings (fingerprint);
+
+CREATE TABLE IF NOT EXISTS evaluations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    posting_id      INTEGER NOT NULL REFERENCES postings (id),
+    run_id          INTEGER REFERENCES runs (id),
+    rubric_version  TEXT,
+    dimension_scores TEXT NOT NULL,
+    block_notes     TEXT,
+    weighted_score  REAL NOT NULL,
+    block_g_verdict TEXT NOT NULL DEFAULT 'PASS',
+    block_g_flags   TEXT,
+    fit_summary     TEXT,
+    evaluated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_evaluations_posting ON evaluations (posting_id);
+
+CREATE TABLE IF NOT EXISTS presentations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    posting_id INTEGER NOT NULL REFERENCES postings (id),
+    run_id     INTEGER REFERENCES runs (id),
+    shown_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS verdicts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    posting_id INTEGER NOT NULL REFERENCES postings (id),
+    verdict    TEXT NOT NULL,
+    reason     TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS learned_rules (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_text  TEXT NOT NULL,
+    dimension  TEXT,
+    verdict_id INTEGER REFERENCES verdicts (id),
+    created_at TEXT NOT NULL,
+    active     INTEGER DEFAULT 1
+);
+"""
+
+
+@contextmanager
+def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
+    config.ensure_dirs()
+    path = db_path or config.DB_PATH
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# Columns added after the first release. Applied idempotently so an existing
+# jobs.db picks them up without a rebuild.
+_MIGRATIONS = [
+    ("postings", "tracks", "TEXT DEFAULT ''"),
+    ("postings", "audience", "TEXT"),
+    ("postings", "ai_fluency_requested", "INTEGER DEFAULT 0"),
+    ("evaluations", "track", "TEXT DEFAULT 'ai_enablement'"),
+    ("evaluations", "scope_modifier", "REAL DEFAULT 0"),
+]
+
+
+def init_db(db_path: Path | None = None) -> None:
+    with connect(db_path) as conn:
+        conn.executescript(SCHEMA)
+        for table, column, decl in _MIGRATIONS:
+            existing = {
+                row["name"] for row in conn.execute(f"PRAGMA table_info({table})")
+            }
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
+# ------------------------------------------------------------------------ runs
+
+
+def start_run(conn: sqlite3.Connection, mode: str, params: dict | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO runs (mode, params, started_at) VALUES (?, ?, ?)",
+        (mode, json.dumps(params or {}), now_iso()),
+    )
+    return int(cur.lastrowid)
+
+
+def finish_run(conn: sqlite3.Connection, run_id: int, **counts: Any) -> None:
+    fields = ", ".join(f"{k} = ?" for k in counts)
+    values = list(counts.values())
+    sql = "UPDATE runs SET finished_at = ?" + (f", {fields}" if fields else "") + " WHERE id = ?"
+    conn.execute(sql, [now_iso(), *values, run_id])
+
+
+def latest_run(conn: sqlite3.Connection, mode: str | None = None) -> sqlite3.Row | None:
+    if mode:
+        return conn.execute(
+            "SELECT * FROM runs WHERE mode = ? ORDER BY id DESC LIMIT 1", (mode,)
+        ).fetchone()
+    return conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone()
+
+
+# -------------------------------------------------------------------- postings
+
+
+def upsert_posting(
+    conn: sqlite3.Connection, posting: Posting, run_id: int | None = None
+) -> tuple[int, bool]:
+    """Insert or refresh a posting. Returns (posting_id, is_new)."""
+    fp = compute_fingerprint(posting.company, posting.title, posting.description)
+    dhash = description_hash(posting.description)
+    timestamp = now_iso()
+
+    existing = conn.execute(
+        "SELECT id, first_seen FROM postings WHERE ats = ? AND source_slug = ? AND source_id = ?",
+        (posting.ats, posting.source_slug, posting.source_id),
+    ).fetchone()
+
+    if existing:
+        posting_id = int(existing["id"])
+        conn.execute(
+            """
+            UPDATE postings SET
+                fingerprint = ?, description_hash = ?, company = ?, title = ?,
+                url = ?, apply_url = ?, location_raw = ?, city = ?, region = ?,
+                country = ?, work_model = ?, department = ?, team = ?,
+                employment_type = ?, salary_min = ?, salary_max = ?, salary_raw = ?,
+                equity_mentioned = ?, bonus_mentioned = ?, published_at = ?,
+                date_confidence = ?, description = ?, last_seen = ?, is_live = 1
+            WHERE id = ?
+            """,
+            (
+                fp, dhash, posting.company, posting.title, posting.url,
+                posting.apply_url, posting.location_raw, posting.city, posting.region,
+                posting.country, posting.workplace_type, posting.department,
+                posting.team, posting.employment_type, posting.salary_min,
+                posting.salary_max, posting.salary_raw, int(posting.equity_mentioned),
+                int(posting.bonus_mentioned), posting.published_at,
+                posting.date_confidence, posting.description, timestamp, posting_id,
+            ),
+        )
+        is_new = False
+    else:
+        cur = conn.execute(
+            """
+            INSERT INTO postings (
+                fingerprint, description_hash, source_id, ats, source_slug, company,
+                title, url, apply_url, location_raw, city, region, country,
+                work_model, department, team, employment_type, salary_min, salary_max,
+                salary_raw, equity_mentioned, bonus_mentioned, published_at,
+                date_confidence, description, first_seen, last_seen, state
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                fp, dhash, posting.source_id, posting.ats, posting.source_slug,
+                posting.company, posting.title, posting.url, posting.apply_url,
+                posting.location_raw, posting.city, posting.region, posting.country,
+                posting.workplace_type, posting.department, posting.team,
+                posting.employment_type, posting.salary_min, posting.salary_max,
+                posting.salary_raw, int(posting.equity_mentioned),
+                int(posting.bonus_mentioned), posting.published_at,
+                posting.date_confidence, posting.description, timestamp, timestamp,
+                STATE_NEW,
+            ),
+        )
+        posting_id = int(cur.lastrowid)
+        is_new = True
+
+    conn.execute(
+        """INSERT INTO sightings (posting_id, run_id, fingerprint, seen_at,
+                                  published_at_reported)
+           VALUES (?, ?, ?, ?, ?)""",
+        (posting_id, run_id, fp, timestamp, posting.published_at),
+    )
+    return posting_id, is_new
+
+
+def get_posting(conn: sqlite3.Connection, posting_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM postings WHERE id = ?", (posting_id,)).fetchone()
+
+
+def set_state(conn: sqlite3.Connection, posting_id: int, state: str,
+              reason: str | None = None) -> None:
+    if reason is None:
+        conn.execute("UPDATE postings SET state = ? WHERE id = ?", (state, posting_id))
+    else:
+        conn.execute(
+            "UPDATE postings SET state = ?, prefilter_reason = ? WHERE id = ?",
+            (state, reason, posting_id),
+        )
+
+
+def mark_dead(conn: sqlite3.Connection, posting_id: int) -> None:
+    conn.execute(
+        "UPDATE postings SET is_live = 0, last_live_check = ? WHERE id = ?",
+        (now_iso(), posting_id),
+    )
+
+
+def mark_live_checked(conn: sqlite3.Connection, posting_id: int, live: bool) -> None:
+    conn.execute(
+        "UPDATE postings SET is_live = ?, last_live_check = ? WHERE id = ?",
+        (int(live), now_iso(), posting_id),
+    )
+
+
+def suppressed_fingerprints(conn: sqlite3.Connection) -> set[str]:
+    """Every fingerprint Doran has already been shown, in any form.
+
+    Queried by fingerprint rather than by posting id on purpose: that is what
+    keeps a rejected role suppressed when it reappears next month under a fresh
+    ATS id with a lightly edited description.
+    """
+    placeholders = ",".join("?" for _ in SUPPRESSED_STATES)
+    rows = conn.execute(
+        f"SELECT DISTINCT fingerprint FROM postings WHERE state IN ({placeholders})",
+        tuple(SUPPRESSED_STATES),
+    ).fetchall()
+    return {row["fingerprint"] for row in rows}
+
+
+def already_evaluated(conn: sqlite3.Connection, rubric_version: str) -> set[str]:
+    """Fingerprints already scored under the current rubric.
+
+    Without this, every posting that scored below 4.0 gets re-queued on the next
+    run and re-scored to the same number forever. Keyed on rubric version, so
+    changing the rubric correctly re-opens everything for scoring.
+    """
+    rows = conn.execute(
+        """SELECT DISTINCT p.fingerprint
+           FROM postings p JOIN evaluations e ON e.posting_id = p.id
+           WHERE e.rubric_version = ?""",
+        (str(rubric_version),),
+    ).fetchall()
+    return {row["fingerprint"] for row in rows}
+
+
+def postings_in_state(conn: sqlite3.Connection, state: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM postings WHERE state = ? ORDER BY id", (state,)
+    ).fetchall()
+
+
+def repost_signals(conn: sqlite3.Connection, fingerprint_value: str) -> dict[str, Any]:
+    """Evidence for Block G's perpetual-repost check.
+
+    A legitimate role is posted once. A ghost job gets taken down and relisted
+    over and over -- which shows up here as several distinct ATS ids sharing one
+    fingerprint, and/or a published_at that keeps resetting forward.
+    """
+    rows = conn.execute(
+        """SELECT DISTINCT posting_id, published_at_reported
+           FROM sightings WHERE fingerprint = ? ORDER BY seen_at""",
+        (fingerprint_value,),
+    ).fetchall()
+    distinct_ids = {row["posting_id"] for row in rows}
+    dates = sorted({row["published_at_reported"] for row in rows if row["published_at_reported"]})
+    return {
+        "distinct_posting_ids": len(distinct_ids),
+        "distinct_published_dates": len(dates),
+        "published_dates": dates,
+        "perpetual_repost": len(distinct_ids) > 1 or len(dates) > 1,
+    }
+
+
+# ----------------------------------------------------------------- evaluations
+
+
+def record_evaluation(
+    conn: sqlite3.Connection,
+    posting_id: int,
+    *,
+    run_id: int | None,
+    rubric_version: str,
+    dimension_scores: dict[str, float],
+    weighted_score: float,
+    block_g_verdict: str,
+    block_g_flags: list[str] | None,
+    fit_summary: str,
+    block_notes: dict[str, str] | None = None,
+    track: str = "ai_enablement",
+    scope_modifier: float = 0.0,
+) -> int:
+    cur = conn.execute(
+        """INSERT INTO evaluations (
+               posting_id, run_id, rubric_version, dimension_scores, block_notes,
+               weighted_score, block_g_verdict, block_g_flags, fit_summary,
+               evaluated_at, track, scope_modifier)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            posting_id, run_id, rubric_version, json.dumps(dimension_scores),
+            json.dumps(block_notes or {}), weighted_score, block_g_verdict,
+            json.dumps(block_g_flags or []), fit_summary, now_iso(),
+            track, scope_modifier,
+        ),
+    )
+    # Only advance the state forward. Re-running record-eval after a report or a
+    # verdict must NOT drag a posting back to `evaluated`: that would resurrect
+    # something Doran has already seen (breaking the never-show-twice rule) and
+    # silently drop it off /shortlist while its verdict row still exists.
+    current = conn.execute(
+        "SELECT state FROM postings WHERE id = ?", (posting_id,)
+    ).fetchone()
+    if not current or current[0] not in SUPPRESSED_STATES:
+        set_state(conn, posting_id, STATE_EVALUATED)
+    return int(cur.lastrowid)
+
+
+def latest_evaluation(conn: sqlite3.Connection, posting_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM evaluations WHERE posting_id = ? ORDER BY id DESC LIMIT 1",
+        (posting_id,),
+    ).fetchone()
+
+
+def presentable(conn: sqlite3.Connection, threshold: float,
+                run_id: int | None = None,
+                track: str | None = None) -> list[sqlite3.Row]:
+    """Evaluated postings that clear the bar, pass Block G, are live, and are unseen.
+
+    `track` selects which list. Evaluations are stored per track, so the same
+    posting can hold a track A score and a track B score; the report shows it
+    once, in track A.
+    """
+    sql = """
+        SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict,
+               e.block_g_flags, e.track
+        FROM postings p
+        JOIN evaluations e ON e.id = (
+            SELECT id FROM evaluations
+            WHERE posting_id = p.id AND (? IS NULL OR track = ?)
+            ORDER BY id DESC LIMIT 1
+        )
+        WHERE p.state = ?
+          AND p.is_live = 1
+          AND e.weighted_score >= ?
+          AND e.block_g_verdict != 'FAIL'
+        ORDER BY e.weighted_score DESC
+    """
+    return conn.execute(sql, (track, track, STATE_EVALUATED, threshold)).fetchall()
+
+
+def worth_knowing(conn: sqlite3.Connection, threshold: float,
+                  floor: float, limit: int = 3) -> list[sqlite3.Row]:
+    """Evaluated postings just under the bar, so nothing good is silently hidden.
+
+    Hard-capped and rendered as one line each -- this exists so a near-miss gets
+    a mention, not so the report can quietly grow into a spray-and-pray list.
+    """
+    return conn.execute(
+        """
+        SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict, e.block_g_flags
+        FROM postings p
+        JOIN evaluations e ON e.id = (
+            SELECT id FROM evaluations WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+        )
+        WHERE p.state = ? AND p.is_live = 1
+          AND e.weighted_score < ? AND e.weighted_score >= ?
+          AND e.block_g_verdict != 'FAIL'
+        ORDER BY e.weighted_score DESC LIMIT ?
+        """,
+        (STATE_EVALUATED, threshold, floor, limit),
+    ).fetchall()
+
+
+def near_misses(conn: sqlite3.Connection, threshold: float,
+                companies: Iterable[str]) -> list[sqlite3.Row]:
+    """Best sub-threshold role per named company. Targeted scans only."""
+    names = [c.strip().lower() for c in companies if c and c.strip()]
+    if not names:
+        return []
+    placeholders = ",".join("?" for _ in names)
+    sql = f"""
+        SELECT p.company, p.title, MAX(e.weighted_score) AS best_score,
+               COUNT(*) AS evaluated_count
+        FROM postings p
+        JOIN evaluations e ON e.posting_id = p.id
+        WHERE LOWER(p.company) IN ({placeholders})
+          AND e.weighted_score < ?
+          AND p.state = ?
+        GROUP BY LOWER(p.company)
+        ORDER BY best_score DESC
+    """
+    return conn.execute(sql, (*names, threshold, STATE_EVALUATED)).fetchall()
+
+
+# --------------------------------------------------------- presenting/verdicts
+
+
+def mark_presented(conn: sqlite3.Connection, posting_ids: Iterable[int],
+                   run_id: int | None = None) -> int:
+    timestamp = now_iso()
+    count = 0
+    for posting_id in posting_ids:
+        conn.execute(
+            "INSERT INTO presentations (posting_id, run_id, shown_at) VALUES (?,?,?)",
+            (posting_id, run_id, timestamp),
+        )
+        set_state(conn, posting_id, STATE_PRESENTED)
+        count += 1
+    return count
+
+
+def record_verdict(conn: sqlite3.Connection, posting_id: int, verdict: str,
+                   reason: str | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO verdicts (posting_id, verdict, reason, created_at) VALUES (?,?,?,?)",
+        (posting_id, verdict, reason, now_iso()),
+    )
+    set_state(conn, posting_id, verdict)
+    return int(cur.lastrowid)
+
+
+def awaiting_verdict(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """SELECT p.*, e.weighted_score, e.fit_summary
+           FROM postings p
+           LEFT JOIN evaluations e ON e.id = (
+               SELECT id FROM evaluations WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+           )
+           WHERE p.state = ?
+           ORDER BY e.weighted_score DESC""",
+        (STATE_PRESENTED,),
+    ).fetchall()
+
+
+def shortlist(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """SELECT p.*, e.weighted_score, e.fit_summary, v.verdict, v.reason
+           FROM postings p
+           LEFT JOIN evaluations e ON e.id = (
+               SELECT id FROM evaluations WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+           )
+           LEFT JOIN verdicts v ON v.id = (
+               SELECT id FROM verdicts WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+           )
+           WHERE p.state IN ('interested', 'saved', 'applied')
+           ORDER BY e.weighted_score DESC""",
+    ).fetchall()
+
+
+def add_learned_rule(conn: sqlite3.Connection, rule_text: str,
+                     dimension: str | None = None,
+                     verdict_id: int | None = None) -> int:
+    cur = conn.execute(
+        """INSERT INTO learned_rules (rule_text, dimension, verdict_id, created_at)
+           VALUES (?,?,?,?)""",
+        (rule_text, dimension, verdict_id, now_iso()),
+    )
+    return int(cur.lastrowid)
+
+
+def stats(conn: sqlite3.Connection) -> dict[str, Any]:
+    rows = conn.execute(
+        "SELECT state, COUNT(*) AS n FROM postings GROUP BY state"
+    ).fetchall()
+    by_state = {row["state"]: row["n"] for row in rows}
+    total = conn.execute("SELECT COUNT(*) AS n FROM postings").fetchone()["n"]
+    runs = conn.execute("SELECT COUNT(*) AS n FROM runs").fetchone()["n"]
+    rules = conn.execute(
+        "SELECT COUNT(*) AS n FROM learned_rules WHERE active = 1"
+    ).fetchone()["n"]
+    return {"total_postings": total, "by_state": by_state, "runs": runs,
+            "learned_rules": rules}

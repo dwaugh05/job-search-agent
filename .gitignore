@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local backups / scratch
+data/*.bak-*
+data/runs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+data/jobs.db

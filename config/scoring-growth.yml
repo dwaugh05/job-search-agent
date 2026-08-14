@@ -1,0 +1,257 @@
+# TRACK B -- Growth marketing (the backup list).
+#
+# Same scoring ENGINE as config/scoring.yml, different numbers. The track is a
+# config selection, not a second code path -- see the architecture invariant in
+# CLAUDE.md. If the two tracks ever diverge in code, that is a bug.
+#
+# Calibrated against Doran's pre-AI history rather than the Cloudflare AI year:
+#   Senior Growth Marketing Manager, Cloudflare (May 2022 - May 2025)
+#     SaaS website acquisition, CRO, A/B testing, web metrics analysis,
+#     quarterly website strategy, landing-page optimisation, Salesforce/Marketo
+#   Senior Marketing Manager, Intuit (Jan 2019 - Feb 2022)
+#     Multi-channel campaigns, demand gen, UX/AB optimisation, user research,
+#     CTR/CVR analytics, cross-functional leadership
+#
+# This list is the backup. It holds the same 4.0 bar as track A -- a fallback
+# job still has to be worth an application.
+
+version: 1
+track: growth_marketing
+label: Growth marketing
+scale:
+  min: 1.0
+  max: 5.0
+pass_threshold: 4.0
+max_results: 5
+
+dimensions:
+
+  - id: 1
+    key: growth_archetype_fit
+    name: Growth marketing archetype fit
+    weight: 22
+    block: A
+    notes: >-
+      Owning growth, demand generation, or the web/lifecycle funnel for a
+      business. Acquisition, conversion optimisation, experimentation, and
+      measurable pipeline impact. This is the pre-AI Doran: the person who ran
+      Cloudflare's quarterly website strategy and A/B testing programme.
+      Do NOT require any AI content here -- that is scored as a candidate
+      strength modifier, not as role quality.
+    anchors:
+      "5.0": Owns the website/conversion half of the funnel -- CRO, experimentation, landing pages, turning arriving traffic into leads -- with strategy authority.
+      "4.5": Owns growth end to end including conversion, with campaigns as one component rather than the whole job.
+      "3.5": Owns demand generation as traffic CREATION -- paid, campaigns, media -- which is real growth work but not where his proof lives.
+      "3.0": Marketing role touching growth, but mostly execution against someone else's strategy.
+      "2.0": Campaign or channel execution only, no funnel ownership.
+      "1.0": Not a growth or demand role.
+
+  - id: 2
+    key: technical_marketing_depth
+    name: Technical marketing depth
+    weight: 10
+    block: C
+    notes: >-
+      Doran's edge over a typical growth marketer is that he builds: martech
+      integration, experimentation tooling, analytics, SQL, landing pages,
+      Marketo/Salesforce plumbing, and now agentic workflows. Score how much a
+      role lets that matter. As in track A this also measures mismatch risk --
+      a role demanding production engineering is a bad fit, not a good one.
+    anchors:
+      "5.0": Explicitly technical growth -- martech stack, experimentation infrastructure, analytics, web implementation.
+      "4.0": Technical fluency valued; owns tooling and measurement.
+      "3.0": Standard marketing role; technical depth neither required nor rewarded.
+      "2.0": Purely strategic or brand-led with no technical surface.
+      "1.0": Demands production software engineering.
+
+  - id: 3
+    key: seniority_scope
+    name: Seniority and scope band
+    weight: 8
+    block: B
+    notes: >-
+      Track B targets Senior Manager through Director -- roles Doran clears
+      comfortably rather than stretches into. He chose this narrower band
+      deliberately for the backup list. VP+ and Head-of are gated out in
+      profile.yml; score the remaining range on scope, not title.
+    anchors:
+      "5.0": Director-level ownership of a growth function with strategy authority.
+      "4.0": Senior Manager or Manager owning a defined growth programme end to end.
+      "3.0": Contributes to a growth programme someone else owns.
+      "2.0": Execution-only seat.
+      "1.0": Junior scope, or over-reach beyond Director.
+
+  - id: 4
+    key: compensation
+    name: Compensation
+    weight: 14
+    block: D
+    notes: >-
+      Identical rules to track A. Score the TOP of the posted band -- Doran
+      negotiates there. 10% bonus unless stated, +$35k modeled equity if equity
+      is mentioned at all, benefits excluded.
+    anchors:
+      "5.0": Band top >= $200k, or modeled TC >= $280k.
+      "4.0": Band top $170k-$200k and modeled TC in the $200k-$300k target.
+      "3.0": Band top $150k-$170k.
+      "2.0": Band top $130k-$150k with no equity to make up the gap.
+      "1.0": Below $130k, or a stated maximum under $150k.
+    no_range_listed:
+      score: null
+      note: Truly neutral -- set to null so the weight is dropped from the denominator.
+
+  - id: 5
+    key: location_commute
+    name: Location and commute
+    weight: 12
+    block: E
+    notes: Uses config/commute.yml. Identical to track A.
+    commute_thresholds:
+      - max_minutes: 25
+        score: 5.0
+      - max_minutes: 40
+        score: 4.5
+      - max_minutes: 50
+        score: 4.0
+      - max_minutes: 60
+        score: 3.5
+      - max_minutes: 9999
+        score: 1.0
+    remote_score: 5.0
+    unknown_city_score: 3.0
+    unknown_city_flag: true
+
+  - id: 6
+    key: work_model
+    name: Work model flexibility
+    weight: 6
+    block: E
+    anchors:
+      "5.0": Fully remote, or remote-first with optional office.
+      "4.5": Hybrid, 1-2 days on-site per week.
+      "4.0": Hybrid with unspecified cadence.
+      "3.0": Hybrid, 3+ days on-site.
+      "2.0": Full-time on-site with no flexibility.
+      "1.0": On-site plus mandatory relocation.
+
+  - id: 7
+    key: leadership_influence
+    name: Leadership and influence
+    weight: 8
+    block: B
+    notes: >-
+      Cross-functional leadership without a large direct-report org. At Intuit
+      he led cross-functional teams across sales, PMM, product and design; at
+      Cloudflare he ran quarterly website strategy across teams. Required large
+      people-management remains a mild negative.
+    anchors:
+      "5.0": Senior stakeholder exposure and clear cross-functional ownership; influence without needing formal authority.
+      "4.0": Solid cross-functional collaboration and visible ownership.
+      "3.0": Some collaboration; influence implied but not central.
+      "2.0": Individual delivery role with little reach.
+      "1.0": No influence dimension, or managing a large org is the primary duty.
+
+  - id: 8
+    key: funnel_breadth
+    name: Funnel breadth
+    weight: 9
+    block: A
+    notes: >-
+      How much of the funnel the role actually owns. Doran's strength is the
+      whole web funnel -- traffic through conversion through pipeline -- rather
+      than a single channel.
+    anchors:
+      "5.0": "Full funnel: acquisition through conversion through retention/pipeline."
+      "4.0": Two or three connected stages (e.g. acquisition plus conversion).
+      "3.0": One stage or one channel, owned well.
+      "2.0": A narrow slice of one channel.
+      "1.0": Task-level execution.
+
+  - id: 9
+    key: company_stage_investment
+    name: Company stage and marketing investment
+    weight: 6
+    block: F
+    notes: >-
+      Is there real budget and mandate behind the growth function? Replaces
+      track A's AI-maturity dimension. Both a scaling startup and an established
+      SaaS company work; what fails is a growth role with no resources.
+    anchors:
+      "5.0": Well-funded growth function with clear executive backing and budget.
+      "4.0": Credible, stable company with a real growth mandate.
+      "3.0": Solid company; investment level unclear from the posting.
+      "2.0": Growth framed as a hope rather than a funded programme.
+      "1.0": Unstable, or the role looks under-resourced.
+
+  - id: 10
+    key: autonomy_ownership
+    name: Autonomy and ownership
+    weight: 5
+    block: A
+    notes: >-
+      Room to run. Doran thrives where he sets direction and executes without
+      heavy oversight, and was explicit that procurement red tape blocking tool
+      adoption is a real negative.
+    anchors:
+      "5.0": Sets direction, picks tools, owns outcomes.
+      "4.0": High autonomy within an agreed strategy.
+      "3.0": Standard autonomy for a senior role.
+      "2.0": Heavily prescribed process or stack.
+      "1.0": Rigid, approval-gated environment.
+
+# --------------------------------------------------------- candidate strength
+#
+# Same mechanic as track A: a flat adjustment for HOW STRONG A CANDIDATE Doran
+# would be, applied after the dimensions are averaged. Track B has both a
+# penalty side and a bonus side.
+#
+# The bonus is Doran's own distinction (2026-08-12): "If the role is looking for
+# AI as part of it, but it's highly a growth role and they're just saying they
+# want you to have AI skills of some nature or be AI fluent, then that doesn't
+# necessarily make the role better for me, but it makes me better suited for the
+# role. Therefore, from a qualification standpoint when ranking it, they would
+# consider me a stronger candidate for that type of role."
+#
+# So AI content in a growth role never scores as role quality -- it scores as
+# differentiation. Multiple modifiers stack.
+scope_modifiers:
+  b2b_saas_enterprise: 0.00   # direct proof: Cloudflare, Intuit
+  b2b_other: -0.10            # non-SaaS B2B -- adjacent but not the same motion
+  b2c_dtc_ecommerce: -0.25    # transferable skills, no direct e-commerce/DTC proof
+  agency_or_unnamed_client: -0.40
+
+  # CAPTURE vs CREATION. Doran owns the conversion half of the funnel, not the
+  # traffic half: "I was about capturing those leads via the website. Whereas
+  # most demand generation is about creating the traffic to the website through
+  # campaigns." Campaign, paid, media and webinar management was somebody else's
+  # job in his history, so a role built around it is a weaker candidacy for him
+  # even when the growth title looks right.
+  #
+  # Calibrated to his own numbers: Twilio's Director of Demand Generation scored
+  # 4.75 and he said "maybe like 4"; Roblox scored 4.62 and he said "slightly too
+  # high". Heavy lands Twilio at 4.09, mixed lands Roblox at 4.47.
+  capture_balanced: 0.00        # website/conversion ownership -- his strength
+  campaign_creation_mixed: -0.15  # real campaign component alongside capture work
+  campaign_creation_heavy: -0.35  # predominantly paid, media, campaign or events
+
+bonus_modifiers:
+  ai_fluency_requested: 0.15  # growth role asking for AI skills -> he is differentiated
+
+evidence:
+  required: true
+  cap_without_evidence: 3.0
+  required_blocks: [A, B, C, F]
+
+calibration_anchors:
+  - key: growth_jarvis_luxury_subscription
+    label: Hire With Jarvis - Growth Marketing Manager (luxury subscription)
+    doran_rating: archetype example, not a live target
+    expect_min: 1.0
+    expect_max: 3.6
+    role: ghost_and_b2c
+    guards: >-
+      Two things at once. Content-wise it is B2C/DTC with traditional-media and
+      e-commerce requirements Doran has no proof for, so the b2c_dtc_ecommerce
+      discount must apply. And Block G must FAIL it: "Posted 2 years ago", a
+      staffing agency advertising an unnamed client, and an email address in
+      place of an application form.

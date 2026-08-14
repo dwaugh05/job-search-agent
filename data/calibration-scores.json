@@ -1,0 +1,224 @@
+{
+  "rubric_version": "4",
+  "scored_by": "claude-opus-5; bands from Doran's own ratings",
+  "scores": {
+    "builtin_director_ai_gtm": {
+      "weighted_score": 4.795,
+      "raw_before_modifier": 4.895,
+      "scope": "gtm_marketing_adjacent",
+      "scope_modifier": -0.1,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 4.5,
+        "3": 5.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 5.0,
+        "7": 4.5,
+        "8": 5.0,
+        "9": 5.0,
+        "10": 5.0
+      },
+      "block_notes": {
+        "A": "All three hats explicit: \"strategic owner of GTM's AI Operating Model\" (strategist), \"fully building functional tools within our platform\" (builder), \"drive the change management required\" plus \"Scaled Skill Development and Coaching\" (teacher). Dim 8 held at 4.5 because the nine named functions are all sales-side - Marketing itself is absent from the list.",
+        "B": "\"Partner with VP-level stakeholders to deconstruct complex workflows\" and \"presenting findings in quarterly business reviews (QBRs) to GTM leadership and CIO\". Sr. Manager title carries ownership of nine GTM functions, so scope scores 5.0 regardless of title.",
+        "C": "\"handing technical specs or POCs to the Enterprise AI Engineering team or fully building functional tools within our platform\" - product-owner leaning, no production-engineering bar. 4.5 rather than 5.0 because it tilts toward specifying over building.",
+        "D": "$138,000-$283,000 -> offer point $239,500 base, +10% bonus = $263,450 TC. Base well clear of the $200k anchor for 5.0.",
+        "E": "\"Remote - Hiring Remotely in United States\" - no commute at all.",
+        "F": "\"the Enterprise AI Hub\" and a dedicated \"Enterprise AI Engineering team\", with CIO-level reporting - a funded, sponsored mandate.",
+        "G": "Built In states: \"Sorry, this job was removed at 11:10 a.m. (PST) on Wednesday, Jul 08, 2026.\" Dead posting - retained for calibration only."
+      },
+      "block_g_verdict": "FAIL",
+      "block_g_flags": [
+        "posting removed 2026-07-08; would never be presented in a live scan"
+      ],
+      "fit_summary": "Ceiling anchor. Scores 4.85 on content, and Block G correctly fails it as closed."
+    },
+    "doordash_manager_marketing_ai_enablement": {
+      "weighted_score": 4.82,
+      "raw_before_modifier": 4.82,
+      "scope": "marketing",
+      "scope_modifier": 0.0,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 5.0,
+        "3": 4.0,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 5.0,
+        "7": 4.5,
+        "8": 5.0,
+        "9": 4.5,
+        "10": 4.0
+      },
+      "block_notes": {
+        "A": "\"This role will lead AI enablement for Marketing\" - the archetype stated verbatim. Dim 1 held to 4.5 because the builder hat is thin: \"a blend of strategy, program management, change management, and hands-on enablement\" leans program over build. Dim 8 is 5.0 - \"Partner with all Marketing functions\" is full breadth inside marketing.",
+        "B": "\"office hours, documentation, training\" and \"Lunch & Learns, playbooks, and reusable templates\" is Doran's multiplication model. Dim 3 held to 4.0 because the verbs are supporting ones - \"support the intake and prioritization of AI opportunities\".",
+        "C": "No engineering bar stated anywhere; \"execution-oriented operator\". Comfortable fit, slightly under-using his build capability.",
+        "D": "\"$142,800 - $210,000\" -> offer point $189,840, +10% bonus, plus equity (\"opportunities for equity grants\") = $243,824 TC. Base sits in the $170-200k band.",
+        "E": "\"United States - Remote\".",
+        "F": "\"move from fragmented experimentation to a unified, workflow-aligned AI operating model\" - a real, funded mandate at a large stable employer.",
+        "G": "Live in the Greenhouse feed at scan time; salary range present; single sighting, single publish date."
+      },
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": "Remote, exact archetype, comp merely solid rather than exceptional."
+    },
+    "gitlab_ai_transformation_owner_cro": {
+      "weighted_score": 4.54,
+      "raw_before_modifier": 4.84,
+      "scope": "sales_field",
+      "scope_modifier": -0.3,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 4.5,
+        "3": 4.5,
+        "4": 5.0,
+        "5": 5.0,
+        "6": 5.0,
+        "7": 5.0,
+        "8": 4.5,
+        "9": 5.0,
+        "10": 4.5
+      },
+      "block_notes": {},
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": ""
+    },
+    "plaid_ai_marketing_technologist_lead": {
+      "weighted_score": 4.52,
+      "raw_before_modifier": 4.52,
+      "scope": "marketing",
+      "scope_modifier": 0.0,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 5.0,
+        "3": 4.5,
+        "4": 5.0,
+        "5": 3.5,
+        "6": 4.0,
+        "7": 4.0,
+        "8": 4.5,
+        "9": 4.0,
+        "10": 4.5
+      },
+      "block_notes": {
+        "A": "All three hats in three consecutive bullets: \"Own the strategy and execution for integrating AI into marketing workflows\", \"Design, build, and deploy AI-powered agents and automations\", \"Lead change management efforts by training teams\".",
+        "B": "\"Partner cross-functionally across Marketing, BI, GTM Ops, and Web Engineering teams... and drive adoption\". No VP-level stakeholder language, so dim 7 stays at 4.0.",
+        "C": "\"Operates with a strong builder mentality, driving 0-to-1 development\"; requirements are SQL, Tableau, LLMs and prompt engineering - no production-engineering bar.",
+        "D": "$170,400-$223,200 -> offer point $207,360 base, +10% bonus, plus equity = $263,096 TC. Base clears $200k.",
+        "E": "\"San Francisco HQ\", workplaceType Hybrid - 55 min door-to-door from San Mateo. This is the sole deduction and it is what makes Doran's 90% rather than 100%.",
+        "F": "Established fintech infrastructure company with a named marketing-ops AI initiative; no stated executive sponsor, so 4.0.",
+        "G": "Live in the Ashby feed; compensation published; single sighting."
+      },
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": "Content is a 5.0 archetype match; the SF hybrid commute is the only thing standing between this and the ceiling."
+    },
+    "matchgroup_principal_ai_learning_enablement": {
+      "weighted_score": 4.375,
+      "raw_before_modifier": 4.725,
+      "scope": "company_wide",
+      "scope_modifier": -0.35,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 5.0,
+        "3": 4.5,
+        "4": 5.0,
+        "5": 4.5,
+        "6": 3.0,
+        "7": 5.0,
+        "8": 5.0,
+        "9": 4.5,
+        "10": 4.0
+      },
+      "block_notes": {},
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": ""
+    },
+    "harvey_marketing_engineer": {
+      "weighted_score": 4.33,
+      "raw_before_modifier": 4.33,
+      "scope": "marketing",
+      "scope_modifier": 0.0,
+      "dimension_scores": {
+        "1": 4.5,
+        "2": 5.0,
+        "3": 4.0,
+        "4": 5.0,
+        "5": 3.5,
+        "6": 4.0,
+        "7": 3.5,
+        "8": 4.0,
+        "9": 5.0,
+        "10": 4.5
+      },
+      "block_notes": {
+        "A": "\"Own the identification, scoping, and implementation of AI and automation use cases\" - builder and strategist present, but the teacher hat is entirely absent: there is no training, upskilling or enablement duty anywhere in the posting. That is the main reason dim 1 is 4.0 not 5.0.",
+        "B": "\"partner directly with marketing leadership\" is senior but not VP-level, and there is no champion or power-user model - this is a solo builder seat, so dim 7 is 3.5. Dim 3 stays at 4.0 per the learned rule: \"first role of its kind at Harvey - and one of the highest-leverage seats in the company\" is real greenfield ownership, and the IC title is not penalised.",
+        "C": "\"4+ years of experience in growth engineering, marketing engineering, GTM engineering\" and \"you use tools like Claude Code, Cursor... as part of your daily workflow\". Ideal technical altitude - building, not production engineering. Highest possible score.",
+        "D": "\"$136K - $204K\" -> offer point $183,600, +10% bonus, plus equity = $236,960 TC. Clears the $170k floor at the offer point even though the band's midpoint does not.",
+        "E": "San Francisco, workplaceType Hybrid despite isRemote being true - 55 min door-to-door.",
+        "F": "\"combining frontier agentic AI, an enterprise-grade platform\", \"strong product-market fit and world-class investor support\" - AI-native, resources not the constraint.",
+        "G": "Live in the Ashby feed; compensation published under CA transparency law; single sighting."
+      },
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": "Floor anchor. Excellent technical fit and greenfield ownership, held down by the missing enablement mandate, the solo-builder scope, and the SF commute."
+    },
+    "checkr_staff_ai_solutions_engineer": {
+      "weighted_score": 4.145,
+      "raw_before_modifier": 4.495,
+      "scope": "company_wide",
+      "scope_modifier": -0.35,
+      "dimension_scores": {
+        "1": 5.0,
+        "2": 4.5,
+        "3": 4.0,
+        "4": 5.0,
+        "5": 3.5,
+        "6": 3.0,
+        "7": 5.0,
+        "8": 5.0,
+        "9": 4.0,
+        "10": 4.5
+      },
+      "block_notes": {},
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": ""
+    },
+    "jpmc_vp_role": {
+      "weighted_score": 2.942,
+      "raw_before_modifier": 2.942,
+      "scope": "marketing",
+      "scope_modifier": 0.0,
+      "dimension_scores": {
+        "1": 4.0,
+        "2": 4.0,
+        "3": 1.0,
+        "4": null,
+        "5": 1.0,
+        "6": 1.0,
+        "7": 3.5,
+        "8": 4.0,
+        "9": 3.5,
+        "10": 2.0
+      },
+      "block_notes": {
+        "A": "Content genuinely matches: \"the Martech Operations and AI Enablement Lead in the Marketing team\" and \"Operationalize technology capabilities by defining use cases, operating routines, process changes, controls, adoption plans\". This is exactly why the anchor matters - relevance alone would rank it near the top.",
+        "B": "Title is \"Vice President\", above Doran's stated ceiling of Director or Head. Dim 3 scores 1.0 for over-reach per the scoring.yml anchor.",
+        "C": "\"working knowledge of Martech tools and platforms, experience running or enabling Martech operations teams\" - an operations lead, not a builder.",
+        "D": "No salary range published.",
+        "E": "\"Wilmington, DE, United States\", in-office - across the country, far past the 60-minute hard gate.",
+        "F": "JPMorgan Chase is stable, but the framing is martech operationalization under \"controls\" rather than a bold AI mandate.",
+        "G": "Posted 2026-08-06 and genuinely current - recency and quality are independent."
+      },
+      "block_g_verdict": "PASS",
+      "block_g_flags": [],
+      "fit_summary": "Anti-example. High content relevance, correctly sunk by the title band, geography and work model."
+    }
+  }
+}

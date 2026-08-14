@@ -1,0 +1,185 @@
+# Door-to-door commute minutes from San Mateo 94403 (Hillsdale Caltrain area)
+# at typical weekday morning traffic. Hand-curated on purpose: no API key, no
+# quota, no network call in the hot path, and Doran can correct any number he
+# disagrees with and immediately change how every future scan scores.
+#
+# Scoring thresholds live in scoring.yml (dimension 5), not here. This file only
+# answers "how far is it".
+
+origin:
+  label: San Mateo, CA 94403
+  landmark: Hillsdale Caltrain
+
+# Anything not listed here is treated as unknown and surfaced for review rather
+# than silently passed or silently failed.
+default_unknown: null
+
+cities:
+  # --- Peninsula, immediate ---
+  San Mateo: 5
+  Hillsborough: 10
+  Belmont: 10
+  Foster City: 10
+  Burlingame: 12
+  San Carlos: 14
+  Millbrae: 20
+  Redwood Shores: 15
+  San Bruno: 18
+  Redwood City: 18
+
+  # --- Peninsula, comfortable ---
+  South San Francisco: 27
+  Atherton: 22
+  Brisbane: 25
+  Menlo Park: 25
+  East Palo Alto: 25
+  Palo Alto: 33
+  Daly City: 28
+  Half Moon Bay: 30
+  Pacifica: 30
+
+  # --- South Bay, edge of tolerance ---
+  Hayward: 32
+  Mountain View: 38
+  Los Altos: 35
+  Stanford: 30
+  Sunnyvale: 43
+  Union City: 40
+  Santa Clara: 47
+  Cupertino: 42
+  Newark: 45
+  Milpitas: 48
+  Fremont: 48
+  San Jose: 55
+  Campbell: 55
+  Los Gatos: 58
+  Saratoga: 55
+
+  # --- San Francisco: acceptable but penalized ---
+  # Doran rated the Plaid SF-hybrid role 90%, so this must land as a real
+  # deduction that still clears the bar -- not a hard fail.
+  #
+  # SF is the ONE destination he takes the train to: 40 minutes door to the
+  # Caltrain SF station exit (4th & King). Everything below is that 40 plus the
+  # last-mile time from the station, which is why a SoMa office scores a full
+  # band better than a Marina one. 55 stays the fallback for "San Francisco"
+  # with no neighborhood named -- deliberately mid-range, since guessing low
+  # would flatter a role and guessing high would hide one.
+  San Francisco: 55
+
+  # Walkable / one stop from 4th & King
+  SoMa: 45
+  South Beach: 45
+  Mission Bay: 45
+  Rincon Hill: 47
+  Dogpatch: 48
+  Embarcadero: 50
+  Potrero Hill: 52
+
+  # Downtown core -- short Muni hop
+  Financial District: 52
+  Downtown San Francisco: 52
+  Jackson Square: 54
+  Union Square: 55
+  Mid-Market: 55
+  Civic Center: 55
+  SoMa West: 55
+  Mission District: 55
+  Tenderloin: 56
+
+  # Central -- transfer required
+  Hayes Valley: 58
+  Van Ness: 58
+  Nob Hill: 58
+  Russian Hill: 60
+  North Beach: 60
+  Marina District: 60
+  Pacific Heights: 60
+
+  # Western/northern SF: past the 60-minute gate, and correctly so. Listed
+  # explicitly so they fail legibly instead of landing as "unknown location".
+  Presidio: 65
+  Richmond District: 66
+  Sunset District: 68
+  Golden Gate Park: 66
+  Outer Sunset: 72
+
+  # --- East Bay and beyond: out of range ---
+  Oakland: 60
+  Emeryville: 58
+  Alameda: 58
+  San Leandro: 50
+  Berkeley: 68
+  Richmond: 75
+  Walnut Creek: 75
+  Concord: 85
+  Dublin: 65
+  Pleasanton: 60
+  Livermore: 75
+  San Ramon: 70
+  Danville: 75
+
+  # --- North Bay ---
+  Sausalito: 60
+  Mill Valley: 65
+  San Rafael: 70
+  Novato: 80
+  Petaluma: 90
+
+  # --- Explicitly out of region (listed so they fail fast and legibly) ---
+  Santa Cruz: 75
+  Gilroy: 75
+  Sacramento: 120
+  Stockton: 110
+  Los Angeles: 400
+  Newport Beach: 400
+  Irvine: 400
+  Costa Mesa: 400
+  Santa Ana: 400
+  Long Beach: 400
+  Anaheim: 400
+  West Hollywood: 400
+  Santa Monica: 400
+  El Segundo: 400
+  Pasadena: 400
+  Culver City: 400
+  Burbank: 400
+  Glendale: 400
+  Torrance: 400
+  San Diego: 480
+  Seattle: 600
+  Bellevue: 600
+  Redmond: 600
+  Portland: 600
+  New York: 999
+  Austin: 999
+  Chicago: 999
+  Boston: 999
+  Denver: 999
+  Atlanta: 999
+  Miami: 999
+  Washington: 999
+  Plano: 999
+  Columbus: 999
+  Jersey City: 999
+  Wilmington: 999
+  Philadelphia: 999
+  Charlotte: 999
+  Dallas: 999
+  Houston: 999
+  Phoenix: 999
+  Nashville: 999
+  Detroit: 999
+  Minneapolis: 999
+  Salt Lake City: 999
+  Raleigh: 999
+  Durham: 999
+  Pittsburgh: 999
+  Tampa: 999
+  Orlando: 999
+  Las Vegas: 999
+  Kansas City: 999
+  St. Louis: 999
+  Indianapolis: 999
+  Milwaukee: 999
+  Sunnyvale Texas: 999

@@ -1,0 +1,359 @@
+# The rubric's numbers. Weights sum to 100; each dimension is scored 1.0-5.0 and
+# the weighted average is the final 1.0-5.0 score. Pass threshold is 4.0.
+#
+# Change a weight here and re-run `/calibrate` -- if any of the five anchors
+# leaves its band, the change has broken the scorer.
+
+version: 5
+scale:
+  min: 1.0
+  max: 5.0
+pass_threshold: 4.0
+
+dimensions:
+
+  - id: 1
+    key: role_archetype_fit
+    name: Role archetype fit
+    weight: 22
+    block: A
+    notes: >-
+      THE HARD REQUIREMENT IS AI ENABLEMENT ITSELF -- touching AI workflows
+      through ANY of building, strategy, or enablement training. It is NOT
+      "all three hats present."
+
+      Doran, 2026-08-12, correcting exactly this: "I don't have the builder hat
+      as a requirement, but more of a capability that I can tie into if the job
+      needs it. So it's an upsell that I would use to make myself qualified.
+      Like a checklist item that I check off for them, but not necessarily for
+      me... it's the AI enablement part where I'm touching AI workflows (either
+      through building or strategy or enablement training), that's the hard
+      requirement I want to get out of this new role."
+
+      So the three hats describe what HE OFFERS, not what the role must contain.
+      A pure strategy-and-adoption role with no hands-on building is a full
+      match. Scoring it down for "missing the builder hat" was inverted, and it
+      under-rated Match Group by roughly 0.2.
+
+      Whether the organization is marketing is scored separately, in the scope
+      modifier. Do not penalize a non-marketing role twice.
+    anchors:
+      "5.0": Owns AI enablement/adoption for a business organization, through any mix of building, strategy, or training. Drives how AI actually gets used.
+      "4.5": Owns AI workflow creation for an organization, but without a mandate to drive adoption by others.
+      "4.0": Clear AI enablement mandate that shares ownership, or is one pillar of a broader remit.
+      "3.0": A business role with AI as a component, or an AI role with enablement as a component -- adjacent, not the archetype.
+      "2.0": Operations or growth role that merely mentions AI tooling.
+      "1.0": No AI enablement dimension at all.
+
+  - id: 2
+    key: build_vs_engineer
+    name: Build-vs-engineer balance
+    weight: 12
+    block: C
+    notes: >-
+      This measures MISMATCH RISK -- does the role demand more engineering than
+      Doran has? It does NOT reward roles for offering more building.
+
+      His building capability (agentic workflows, homegrown apps, a custom MCP
+      around Contentful) is an asset he brings to differentiate himself, not a
+      requirement the role must satisfy: "it's an upsell that I would use to make
+      myself qualified... a checklist item that I check off for them, but not
+      necessarily for me." A strategy-and-adoption role with no hands-on build
+      component therefore scores 5.0 here -- there is no mismatch risk at all.
+
+      He is not a career software engineer: HTML/CSS/JS/PHP/SQL and heavy LLM
+      orchestration, not distributed systems.
+    anchors:
+      "5.0": No engineering bar. Workflow building, API/MCP integration, prompt systems, or pure strategy/enablement -- all comfortable.
+      "4.0": Technical builder expected; some coding implied but no CS-degree or production-engineering bar.
+      "3.0": Engineer appears in the title or requirements, but the substance is workflow building and it is likely negotiable.
+      "2.0": Real software engineering expectations -- production services, testing rigor, code review as a core duty.
+      "1.0": ML/AI engineering, model training, research, or distributed systems at scale.
+
+  - id: 3
+    key: seniority_scope
+    name: Seniority and scope band
+    weight: 8
+    block: B
+    notes: >-
+      SCORE SCOPE, NOT TITLE. Doran, in his own words: "I don't want to come off
+      as if I'm looking for a role that as a director, head title necessarily. I
+      don't get stuck on things like that. I'm just more about the
+      responsibilities and the impact." He interviewed at Harvey for an IC seat
+      reporting into a future Head of MOps, called it a step down, and remained
+      very interested. An IC or Manager title is NOT a deduction when the scope
+      is real. VP+ is a hard gate, handled in profile.yml.
+    anchors:
+      "5.0": Owns the initiative end to end with strategy authority. Greenfield or newly created. Room to grow into Head/Director.
+      "4.0": Real ownership of a defined AI program; strategy plus hands-on. Title may be IC, Lead, or Manager -- fine.
+      "3.0": Contributes to someone else's AI program; limited strategy input.
+      "2.0": Execution-only seat, no strategy component, narrow remit.
+      "1.0": Junior/associate scope, or VP+ over-reach.
+
+  - id: 4
+    key: compensation
+    name: Compensation
+    weight: 14
+    block: D
+    notes: >-
+      Score the TOP of the posted band. Doran: "I'd negotiate for that top end,
+      so I'm not worried about the low end of the pay for any of these roles
+      ever." Then apply 10% bonus unless stated, plus $35k modeled equity if
+      equity or RSUs are mentioned at all. Benefits excluded. The floor is
+      enforced as a hard gate on the band maximum, not as a scoring penalty --
+      compensation should not push an otherwise-good role down the list.
+    anchors:
+      "5.0": Band top >= $200k, or modeled TC >= $280k.
+      "4.0": Band top $170k-$200k and modeled TC in the $200k-$300k target.
+      "3.0": Band top $150k-$170k.
+      "2.0": Band top $130k-$150k with no equity to make up the gap.
+      "1.0": Below $130k, or a stated maximum under $150k.
+    no_range_listed:
+      score: null
+      note: >-
+        TRULY neutral, not neutral-minus. Doran: "The fact that the salary isn't
+        published shouldn't make it rate lower." Set dimension 4 to null and
+        record-eval drops its weight from the denominator entirely, so an
+        unpublished range neither helps nor hurts. A fixed 3.2 was a hidden
+        penalty worth about 0.25 on the final score. Block G still flags a
+        missing range in a pay-transparency state (CA/WA/NY/CO) -- that is a
+        legitimacy signal, not a compensation judgement.
+
+  - id: 5
+    key: location_commute
+    name: Location and commute
+    weight: 12
+    block: E
+    notes: Uses config/commute.yml for door-to-door minutes from San Mateo 94403.
+    commute_thresholds:
+      - max_minutes: 25
+        score: 5.0
+      - max_minutes: 40
+        score: 4.5
+      - max_minutes: 50
+        score: 4.0
+      - max_minutes: 60
+        score: 3.5     # San Francisco lands here -- a real deduction that still passes
+      - max_minutes: 9999
+        score: 1.0     # beyond 60 min the hard gate fires first
+    remote_score: 5.0
+    unknown_city_score: 3.0
+    unknown_city_flag: true
+
+  - id: 6
+    key: work_model
+    name: Work model flexibility
+    weight: 6
+    block: E
+    anchors:
+      "5.0": Fully remote, or remote-first with optional office.
+      "4.5": Hybrid, 1-2 days on-site per week.
+      "4.0": Hybrid with unspecified cadence.
+      "3.0": Hybrid, 3+ days on-site.
+      "2.0": Full-time on-site with no flexibility.
+      "1.0": On-site plus mandatory relocation.
+
+  - id: 7
+    key: leadership_multiplication
+    name: Leadership, influence and multiplication
+    weight: 9
+    block: B
+    notes: >-
+      The dotted-line power-user model is Doran's signature: recruit people who
+      spend 90% on their own job and 10% building AI for their team of ~20, then
+      consult and teach rather than manage. Required large direct-report orgs are
+      a mild negative, not a positive.
+    anchors:
+      "5.0": VP/CMO-level stakeholder exposure, owns the initiative, explicit enablement or champion/power-user model.
+      "4.0": Senior stakeholder exposure and cross-functional influence without formal authority.
+      "3.0": Some cross-functional collaboration; influence is implied but not central.
+      "2.0": Individual delivery role with little organizational reach.
+      "1.0": No influence dimension, or requires managing a large org as the primary duty.
+
+  - id: 8
+    key: organizational_reach
+    name: Organizational reach
+    weight: 9
+    block: A
+    notes: >-
+      HOW FAR the role reaches -- not which department it sits in. Department is
+      handled by the scope modifier below, so scoring it here too would penalize
+      a non-marketing role twice. Doran's one hesitation about the Harvey role
+      was that it looked "confined to demand gen and marketing operations"
+      versus his Cloudflare scope that touched the whole lead funnel and product
+      marketing. Breadth is what he was reacting to.
+    anchors:
+      "5.0": Reaches across an entire organization -- many named functions, or the full marketing funnel.
+      "4.0": Solid reach across two or three functions.
+      "3.0": Confined to a single function.
+      "2.0": A narrow slice of one function.
+      "1.0": Individual or single-team scope only.
+
+  - id: 9
+    key: company_ai_maturity
+    name: Company AI maturity and mandate
+    weight: 5
+    block: F
+    notes: >-
+      Both ends of the spectrum are good. An AI-native company (Harvey) where
+      resources are not the constraint, and a traditional org seriously
+      committed to transformation (Cloudflare) both work. What fails is AI as
+      branding with no budget or mandate behind it.
+    anchors:
+      "5.0": AI-native, or a well-resourced org with a funded, executive-backed AI mandate.
+      "4.0": Credible, stable company with a real and visible AI initiative.
+      "3.0": Solid company, AI investment unclear from the posting.
+      "2.0": AI language reads as branding; no evidence of budget or mandate.
+      "1.0": Unstable, or the AI framing appears to be pure marketing.
+
+  - id: 10
+    key: autonomy_tooling_hitl
+    name: Autonomy, tooling latitude and human-in-the-loop
+    weight: 3
+    block: A
+    notes: >-
+      Doran's stated friction at Cloudflare was procurement red tape -- "three
+      months to onboard a new software from Google" -- that forced him to build
+      everything from scratch. Tooling freedom is a genuine positive.
+    anchors:
+      "5.0": Run-it-yourself autonomy, freedom to pick tools, explicit human-in-the-loop philosophy.
+      "4.0": High autonomy; tooling latitude implied.
+      "3.0": Standard autonomy for a senior role.
+      "2.0": Heavily prescribed stack or process.
+      "1.0": Rigid, approval-gated environment with no latitude.
+
+# Adjacency-proof discount. Applied as a flat adjustment to the final weighted
+# score, AFTER the dimensions are averaged.
+#
+# IMPORTANT -- this measures HOW STRONG A CANDIDATE DORAN WOULD BE, not how good
+# the role is. That distinction came directly from him (2026-08-12):
+#
+#   On company-wide scope: "I'm very, very okay with the role being company wide
+#   or not company wide. The real hurdle here is showing the adjacency as proof
+#   ... where I want to make sure I'm a strong candidate that wouldn't get
+#   passed over."
+#
+#   On the GitLab sales-side role: "The only reason why I would maybe consider
+#   not ranking it higher is because it doesn't exactly fit into the marketing
+#   niche where I would be an extremely strong candidate."
+#
+# So the deduction is about competitive positioning: the further a role sits from
+# marketing, the more his proof points have to be argued by analogy rather than
+# shown directly, and the greater the risk of being screened out. He still wants
+# to SEE these roles -- they must never be filtered away, only ranked lower.
+#
+# Classify by WHO THE ROLE SERVES, not by its reporting line. A role reporting
+# into IT that embeds with Finance, Legal, People and GTM is company_wide, not
+# it_internal_only.
+#
+# Calibrated against his own ratings: Reltio 95-100% (GTM with content and
+# messaging duties), GitLab AI Transformation Owner 88-92% (pure sales/field),
+# Checkr 80-85% (company-wide).
+scope_modifiers:
+  marketing: 0.00                 # sits in marketing/growth; proof points apply directly
+  gtm_marketing_adjacent: -0.10   # GTM including content, messaging, campaigns (Reltio)
+  sales_field: -0.30              # sales enablement, field, revenue ops (GitLab ATO, Brex)
+  company_wide: -0.10             # generalized AI enablement across all business functions
+  single_other_function: -0.60    # one non-marketing function: Legal, Finance, HR
+  it_internal_only: -0.90         # IT/ITSM serving internal technology operations only
+
+# 2026-08-14: company_wide cut from -0.35 to -0.10 on Doran's instruction. His
+# words: "Whether the job is focused on marketing or company wide really isn't
+# about a strong negative to it fitting me, so I think at most he would penalize
+# .1 for this scenario." A generalized AI enablement mandate is not evidence he
+# is a weaker candidate -- the archetype match is the credential, regardless of
+# which departments it serves. single_other_function and it_internal_only are
+# unchanged: serving Legal alone really is narrower than serving everyone.
+#
+# The swing in the other direction is the bonus below, which Doran asked for in
+# the same breath: "maybe also think of this as a bonus that swings the other way
+# to give a boost to a score when it is specific to marketing or GTM for AI
+# enablement/builder type roles Specifically."
+bonus_modifiers:
+  marketing_ai_enablement: 0.15   # AI enablement/builder role sitting INSIDE marketing or GTM
+                                  # Set "bonus": "marketing_ai_enablement" on the evaluation when
+                                  # scope is marketing or gtm_marketing_adjacent AND dim 1 >= 4.5.
+
+# Judgement blocks must cite a quoted line from the posting; without one the
+# dimension is capped. This is the main defence against score inflation.
+#
+# Blocks D and E are deliberately exempt. Compensation, location and work model
+# are parsed from structured ATS fields and already shown in the queue -- there
+# is no prose to quote, and demanding a quotation there just deflates good
+# postings for a formatting reason. (This cost Elastic 0.70 points and pushed a
+# genuine 4.16 match down to 3.46 before it was caught.)
+evidence:
+  required: true
+  cap_without_evidence: 3.0
+  required_blocks: [A, B, C, F]
+
+# Regression test. `/calibrate` re-scores these and fails loudly if any drifts.
+calibration_anchors:
+  - key: builtin_director_ai_gtm
+    # The URL slug says "director" but the actual posted title is Sr. Manager --
+    # which is itself a calibration lesson: Doran's highest-rated posting of all
+    # carries a Manager-band title. See dimension 3.
+    label: Reltio - Sr. Manager, AI GTM Strategy & Enablement (via Built In)
+    doran_rating: 95-100%
+    expect_min: 4.7
+    expect_max: 5.0
+    role: ceiling
+  - key: doordash_manager_marketing_ai_enablement
+    label: DoorDash - Manager, Marketing AI Enablement
+    doran_rating: 90-95%
+    expect_min: 4.4
+    expect_max: 5.0
+    role: strong
+  - key: plaid_ai_marketing_technologist_lead
+    label: Plaid - AI Marketing Technologist Lead
+    doran_rating: 90%
+    expect_min: 4.2
+    expect_max: 4.6
+    role: sf_hybrid_penalty
+  - key: matchgroup_principal_ai_learning_enablement
+    label: Match Group - Principal AI Learning & Enablement Partner
+    doran_rating: 83-89%
+    expect_min: 4.20
+    expect_max: 4.50
+    role: enablement_without_building
+    guards: >-
+      That dimension 1 does NOT require the builder hat. This role explicitly
+      excludes hands-on delivery ("this role enables teams to execute, it
+      doesn't deliver everything itself") and Doran still rates it 83-89%. If
+      this drops back toward 4.0, dimension 1 has reverted to an
+      all-three-hats definition. Also guards the multi-location geography fix --
+      the ATS files it under Los Angeles, but it is based in Palo Alto.
+  - key: harvey_marketing_engineer
+    label: Harvey - Marketing Engineer
+    doran_rating: interviewed, interested despite step-down
+    expect_min: 4.0
+    expect_max: 4.4
+    role: floor
+  - key: gitlab_ai_transformation_owner_cro
+    label: GitLab - AI Transformation Owner, CRO
+    doran_rating: 88-92%
+    expect_min: 4.35
+    expect_max: 4.60
+    role: sales_field_adjacency
+    guards: >-
+      The sales-field adjacency discount. Scored 4.84 before Doran rated it,
+      which was ~0.3 too high because no penalty was applied to sales-side roles
+      at all. If this drifts back above 4.6, the rubric has stopped pricing
+      adjacency risk.
+  - key: checkr_staff_ai_solutions_engineer
+    label: Checkr - Staff AI Solutions Engineer
+    doran_rating: 80-85%
+    expect_min: 3.90
+    expect_max: 4.20
+    role: company_wide_floor
+    guards: >-
+      The company-wide discount AND the visibility rule. Must land just above
+      4.0, or in the 3.7-4.0 "worth knowing about" tier -- but must NEVER be
+      filtered out entirely. Doran: "I still would want to see this job and not
+      completely filtered out."
+  - key: jpmc_vp_role
+    label: JPMorgan Chase - VP role
+    doran_rating: bad fit
+    expect_min: 1.0
+    expect_max: 3.0
+    role: hard_fail
