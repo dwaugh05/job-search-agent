@@ -75,6 +75,10 @@ class Lead:
     location: str = ""
     posted_at: str | None = None
     board: str = "linkedin"
+    # Free-text body, when the source gives one up front. Hacker News hiring
+    # posts are prose with no title field to screen on, so the archetype screen
+    # reads this too -- see _LEAD_WORTH_RESOLVING in pipeline.py.
+    text: str = ""
 
     @property
     def job_id(self) -> str:
@@ -92,6 +96,16 @@ DEFAULT_QUERIES_AI = [
     "GTM engineer",
     "AI transformation marketing",
     "AI enablement",
+    # Added 2026-08-14. Two of Doran's 4.0+ matches in run 11 -- Checkr and
+    # Included Health, both "Staff AI Solutions Engineer" -- were found ONLY
+    # because those companies were already on the watch list. No query here
+    # would have surfaced them, so the same title at an unknown employer was
+    # invisible. Doran: "I think you need to add other keywords to your search."
+    "AI solutions engineer",
+    "AI solutions architect",
+    "staff AI solutions",
+    "AI solutions",
+    "AI program enablement",
 ]
 DEFAULT_QUERIES_GROWTH = [
     "growth marketing manager",
@@ -220,4 +234,29 @@ def discover(
         if on_note:
             on_note(f'board query "{query}": {len(found)} hits, {len(fresh)} new')
         time.sleep(POLITE_DELAY)
+
+    # Second channel. Built In is server-rendered with no bot protection and each
+    # job page carries a full schema.org JobPosting -- a real description, a real
+    # salary range and a real ISO datePosted, all better than a LinkedIn card.
+    from . import builtin
+
+    for label, url in builtin.enabled_urls():
+        found = builtin.search(client, url)
+        fresh = [lead for lead in found if lead.url not in seen]
+        seen.update(lead.url for lead in fresh)
+        out.extend(fresh)
+        if on_note:
+            on_note(f'board "{label}": {len(found)} hits, {len(fresh)} new')
+        time.sleep(POLITE_DELAY)
+
+    # Third channel. Highest signal density for the AI/startup archetype, free,
+    # no key, and inherently fresh -- a monthly thread cannot carry a year-old
+    # ghost posting the way an aggregator index can.
+    from . import hn
+
+    found = hn.search(client, months=1, on_note=on_note)
+    fresh = [lead for lead in found if lead.url not in seen]
+    seen.update(lead.url for lead in fresh)
+    out.extend(fresh)
+
     return out

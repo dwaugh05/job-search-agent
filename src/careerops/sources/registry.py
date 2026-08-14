@@ -10,10 +10,14 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import re
+import threading
+import time
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 import httpx
 
+from .. import config
 from ..models import Posting
 from . import ashby, greenhouse, lever, smartrecruiters, workable, workday
 
@@ -40,8 +44,117 @@ USER_AGENT = (
 # timeout here fails silently and is indistinguishable from "this company has no
 # jobs", which quietly drops whole employers from every scan.
 TIMEOUT = httpx.Timeout(90.0, connect=15.0)
+
+# Probing is a different job from fetching. The 90s read timeout above exists so
+# a genuinely huge board (DoorDash's Greenhouse payload is ~8MB) is never
+# truncated. A PROBE only asks "does this slug exist?" and its answer is small,
+# so it must fail fast: nine probes per ATS per company, serialised by the
+# per-host throttle, turn a 90s timeout into thirteen minutes of dead waiting
+# for one company when a provider stops responding.
+PROBE_TIMEOUT = httpx.Timeout(12.0, connect=5.0)
 MAX_WORKERS = 8
 RETRIES = 2
+
+# ---------------------------------------------------------------------------
+# Politeness: per-host rate limiting and backoff.
+#
+# Getting blocked by Greenhouse, Ashby or Lever would break the entire workflow,
+# and the block would outlast the run that caused it. So the defaults here are
+# deliberately conservative: a scan is allowed to take hours. Nothing in this
+# module needs to be fast, it needs to still work tomorrow.
+#
+# Every value is overridable from the `politeness` block in config/profile.yml.
+_POLITENESS = dict(config.profile().get("politeness") or {})
+MIN_INTERVAL = float(_POLITENESS.get("min_seconds_between_requests_per_host", 0.34))
+BACKOFF_BASE = float(_POLITENESS.get("backoff_base_seconds", 2.0))
+BACKOFF_MAX = float(_POLITENESS.get("backoff_max_seconds", 120.0))
+RATE_LIMIT_RETRIES = int(_POLITENESS.get("rate_limit_retries", 5))
+MAX_WORKERS = int(_POLITENESS.get("max_workers", MAX_WORKERS))
+
+HOST_FAILURE_LIMIT = int(_POLITENESS.get("host_failure_limit", 3))
+
+_host_lock = threading.Lock()
+_next_allowed: dict[str, float] = {}
+# Circuit breaker. A host that keeps timing out is dead for this process.
+#
+# Without this, one unresponsive provider stalls an entire scan: probing a
+# company issues nine requests to each ATS, the per-host throttle serialises
+# them, and nine 90-second read timeouts back to back is thirteen minutes for a
+# SINGLE company. Observed live -- apply.workable.com accepted connections and
+# never answered, and every one of the nine hanging probes was Workable.
+_host_failures: dict[str, int] = {}
+_host_down: set[str] = set()
+
+
+def _host_of(url: str) -> str:
+    try:
+        return urlsplit(url).netloc.lower()
+    except ValueError:
+        return url
+
+
+def _wait_turn(url: str) -> None:
+    """Block until this host is allowed another request.
+
+    Serialises per host across the worker threads, so raising MAX_WORKERS
+    parallelises *across* boards without ever pointing more load at one of them.
+    """
+    host = _host_of(url)
+    while True:
+        with _host_lock:
+            now = time.monotonic()
+            ready_at = _next_allowed.get(host, 0.0)
+            if now >= ready_at:
+                _next_allowed[host] = now + MIN_INTERVAL
+                return
+            delay = ready_at - now
+        time.sleep(delay)
+
+
+def _penalise(url: str, seconds: float) -> None:
+    """Push this host's next-allowed time out, so every thread backs off."""
+    host = _host_of(url)
+    with _host_lock:
+        _next_allowed[host] = max(
+            _next_allowed.get(host, 0.0), time.monotonic() + seconds
+        )
+
+
+def _host_is_down(url: str) -> bool:
+    with _host_lock:
+        return _host_of(url) in _host_down
+
+
+def _record_failure(url: str) -> None:
+    host = _host_of(url)
+    with _host_lock:
+        _host_failures[host] = _host_failures.get(host, 0) + 1
+        if HOST_FAILURE_LIMIT and _host_failures[host] >= HOST_FAILURE_LIMIT:
+            _host_down.add(host)
+
+
+def _record_success(url: str) -> None:
+    host = _host_of(url)
+    with _host_lock:
+        if _host_failures.get(host):
+            _host_failures[host] = 0
+
+
+def down_hosts() -> list[str]:
+    """Hosts abandoned this run, so a scan can report them rather than hide it."""
+    with _host_lock:
+        return sorted(_host_down)
+
+
+def _retry_after(response: httpx.Response, attempt: int) -> float:
+    """Honour Retry-After when the server sends one, else exponential backoff."""
+    raw = response.headers.get("Retry-After")
+    if raw:
+        try:
+            return min(float(raw), BACKOFF_MAX)
+        except ValueError:
+            pass
+    return min(BACKOFF_BASE * (2 ** attempt), BACKOFF_MAX)
 
 # SmartRecruiters needs one extra request per posting for the description body.
 # We cap that and report what we skipped rather than silently truncating.
@@ -62,23 +175,59 @@ def _client() -> httpx.Client:
     )
 
 
-def _get_json(client: httpx.Client, url: str) -> Any | None:
+def _get_json(client: httpx.Client, url: str,
+              timeout: httpx.Timeout | None = None,
+              max_attempts: int | None = None) -> Any | None:
     """GET and decode JSON, retrying transient failures.
 
     Returns None both for "no such board" and for "the request failed", so
     callers that care about the difference should probe explicitly.
     """
-    for attempt in range(RETRIES + 1):
+    if _host_is_down(url):
+        return None
+
+    attempts = (max_attempts if max_attempts is not None
+                else max(RETRIES, RATE_LIMIT_RETRIES) + 1)
+    for attempt in range(attempts):
+        if _host_is_down(url):
+            return None
+        _wait_turn(url)
         try:
-            response = client.get(url)
+            response = (client.get(url, timeout=timeout) if timeout is not None
+                        else client.get(url))
         except httpx.HTTPError:
-            if attempt < RETRIES:
+            # Includes read and connect timeouts, which is how a hung host
+            # presents. Count it: enough of these and we stop talking to this
+            # host for the rest of the run.
+            _record_failure(url)
+            if attempt < RETRIES and not _host_is_down(url):
+                time.sleep(min(BACKOFF_BASE * (2 ** attempt), BACKOFF_MAX))
                 continue
             return None
+        _record_success(url)
         if response.status_code == 404:
             return None
-        if response.status_code >= 500 or response.status_code == 429:
+        if response.status_code == 429:
+            # A genuine rate limit. Answering it with an immediate retry is how
+            # you turn a throttle into a ban, so wait -- and hold the whole host
+            # back with us, since every other worker is about to hit the same
+            # wall.
+            if attempt < attempts - 1:
+                delay = _retry_after(response, attempt)
+                _penalise(url, delay)
+                time.sleep(delay)
+                continue
+            return None
+        if response.status_code >= 500:
+            # NOT a rate limit. Slug probing generates 5xx routinely -- it is
+            # what several ATS platforms return for "no such board" -- so
+            # treating these like 429s was catastrophic: six retries backing off
+            # to 120s each, while _penalise froze every other probe queued for
+            # that host. Thirty probes would finish in three seconds and the
+            # remaining fifteen would hang for minutes. Retry briefly, never
+            # penalise the host.
             if attempt < RETRIES:
+                time.sleep(min(0.5 * (2 ** attempt), 2.0))
                 continue
             return None
         if response.status_code != 200:
@@ -162,7 +311,12 @@ def probe_detailed(
         if ats == workday.NAME:
             payload = workday.search(client, slug, offset=0)
         else:
-            payload = _get_json(client, adapter.build_url(slug))
+            # One attempt only. Retrying a probe is pointless -- a failure here
+            # means "this slug is not it", and the caller has dozens more to
+            # try. With retries, a single unresponsive provider cost 90 seconds
+            # per probe and nine probes per company.
+            payload = _get_json(client, adapter.build_url(slug),
+                                timeout=PROBE_TIMEOUT, max_attempts=1)
         if payload is None:
             return False, 0, False
         jobs = adapter.extract_jobs(payload)

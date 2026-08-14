@@ -14,8 +14,10 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from . import config, prefilter, queue, resolve, store
+from .comp import parse_salary
 from .fingerprint import fingerprint as compute_fingerprint
-from .models import STATE_PREFILTERED, STATE_REJECTED_PREFILTER
+from .models import STATE_PREFILTERED, STATE_REJECTED_PREFILTER, Posting
+from .normalize import clean, parse_location, parse_work_model
 from .sources.registry import _client, check_url_live, fetch_many
 
 MODE_BROAD = "broad"
@@ -91,7 +93,7 @@ def run_discovery(
     if use_boards:
         window = freshness_days if freshness_days is not None else (
             config.profile().get("hard_gates", {}).get("freshness_days", 30))
-        new_targets, _leads = discover_via_boards(
+        new_targets, _leads, board_postings = discover_via_boards(
             conn, run_id, days=window, notes=notes)
         known_slugs = {(a, s) for a, s, _ in targets}
         for target in new_targets:
@@ -100,6 +102,16 @@ def run_discovery(
                 board_added += 1
 
     postings, per_company = fetch_many(targets, on_note=notes.append)
+    # Board-sourced postings join the same pipeline as ATS ones: identical
+    # prefilter gates, identical fingerprinting, identical scoring. The only
+    # difference is where the body came from.
+    if board_postings:
+        swept = {(p.company.strip().lower(), p.title.strip().lower())
+                 for p in postings}
+        postings.extend(
+            p for p in board_postings
+            if (p.company.strip().lower(), p.title.strip().lower()) not in swept
+        )
     raw_count = len(postings)
 
     rubric_version = str(config.scoring().get("version", 1))
@@ -125,6 +137,8 @@ def run_discovery(
             enforce_freshness=enforce_freshness,
             freshness_days=freshness_days,
             first_sighting=is_new,
+            # Our own first sighting, which no feed can rewrite by reposting.
+            first_seen=None if is_new else store.first_seen_of(conn, posting_id),
         )
         if result.passed:
             store.set_state(conn, posting_id, STATE_PREFILTERED,
@@ -206,7 +220,12 @@ def run_discovery(
 # added is invisible. This channel searches boards ROLE-first, then resolves
 # each unknown employer to its real ATS and adds it to the sweep permanently.
 
-BOARD_RESOLVE_CAP = 30
+# Tunable from config/profile.yml -> politeness.board_resolve_cap. Each unknown
+# employer costs up to ~45 probe requests to resolve, and once added it is swept
+# on every future run, so this caps permanent queue growth as much as traffic.
+BOARD_RESOLVE_CAP = int(
+    (config.profile().get("politeness") or {}).get("board_resolve_cap", 60)
+)
 
 # Cheap title screen applied BEFORE any resolution work. Resolving a company
 # costs dozens of HTTP probes, so we only spend that on leads whose title
@@ -215,9 +234,24 @@ _LEAD_WORTH_RESOLVING = re.compile(
     r"(ai enablement|enablement|marketing ai|ai marketing|marketing engineer|"
     r"gtm engineer|marketing technolog|ai transformation|growth marketing|"
     r"demand gen|conversion|web growth|website growth|marketing operations|"
-    r"ai operations|ai program)",
+    r"ai operations|ai program|"
+    # Added 2026-08-14 alongside the new board queries. Without these terms the
+    # new "AI solutions" searches would return leads that this screen then threw
+    # away before resolution -- the keyword change alone would have done nothing.
+    r"ai solutions|solutions architect|solutions engineer|applied ai)",
     re.IGNORECASE,
 )
+
+
+def _lead_haystack(lead) -> str:
+    """What the archetype screen reads.
+
+    Most boards give a clean title. Hacker News hiring posts are prose with no
+    title field at all -- the role is buried in a pipe-delimited header whose
+    order varies by poster -- so the body has to be screened too or every HN lead
+    is discarded before it is ever looked at.
+    """
+    return f"{getattr(lead, 'title', '')} {getattr(lead, 'text', '')}"
 
 
 def discover_via_boards(
@@ -241,12 +275,30 @@ def discover_via_boards(
         for entry in (config.sources().get("companies") or [])
     }
 
+    from .sources import builtin
+
+    prebuilt: dict[str, Posting] = {}
     with _client() as client:
         leads = boards.discover(client, days=days, on_note=notes.append)
 
+        # Built In listing pages give a title and URL but not the employer -- the
+        # company only appears in the JobPosting on the job page itself. Screen on
+        # title FIRST (free), then fetch only the survivors, so an on-archetype
+        # title costs one request and everything else costs nothing.
+        for lead in leads:
+            if lead.board != builtin.NAME or lead.company:
+                continue
+            if not _LEAD_WORTH_RESOLVING.search(_lead_haystack(lead)):
+                continue
+            posting = builtin.posting_from_lead(client, lead)
+            if posting:
+                lead.company = posting.company
+                prebuilt[lead.url] = posting
+
     relevant = [
         lead for lead in leads
-        if _LEAD_WORTH_RESOLVING.search(lead.title)
+        if _LEAD_WORTH_RESOLVING.search(_lead_haystack(lead))
+        and lead.company.strip()
         and lead.company.strip().lower() not in known
     ]
     notes.append(
@@ -260,13 +312,20 @@ def discover_via_boards(
         by_company.setdefault(lead.company.strip(), lead)
 
     new_targets: list[tuple[str, str, str]] = []
+    unresolved: list[object] = []
     attempted = 0
     for company in list(by_company)[:resolve_cap]:
         attempted += 1
-        res = resolve.resolve(company)
+        # deep=False: skip the headless-browser render during bulk resolution.
+        # It is the slowest part of a FAILED lookup and this loop can run sixty
+        # times in one scan. A single `resolve-company` at the CLI still tries
+        # everything.
+        res = resolve.resolve(company, deep=False)
         if res.ok and res.ats and res.slug:
             resolve.save_resolution(res, watch=True)
             new_targets.append((res.ats, res.slug, res.company))
+        else:
+            unresolved.append(by_company[company])
 
     skipped = max(0, len(by_company) - resolve_cap)
     notes.append(
@@ -275,4 +334,72 @@ def discover_via_boards(
         + (f"; {skipped} over the per-run cap, they will be picked up next run"
            if skipped else "")
     )
-    return new_targets, len(leads)
+
+    # Companies with no reachable ATS used to be dropped here, silently. That is
+    # the crack Doran identified: "a job that is a good potential gets lost in
+    # the cracks." Read those postings from the board's own live page instead --
+    # still fetched at scan time, never from a snapshot, so the no-cached-search
+    # rule holds. The employer feed is always preferred when one exists.
+    orphans = _postings_from_leads(unresolved, notes, prebuilt)
+    return new_targets, len(leads), orphans
+
+
+def _postings_from_leads(leads: list, notes: list[str],
+                         prebuilt: dict[str, Posting] | None = None) -> list[Posting]:
+    """Build Postings from board leads whose employer has no reachable ATS."""
+    from .sources import boards
+
+    prebuilt = prebuilt or {}
+    out: list[Posting] = []
+    if not leads:
+        return out
+
+    with _client() as client:
+        for lead in leads:
+            # Built In postings were already parsed in full while discovering the
+            # employer name, so there is nothing left to fetch.
+            ready = prebuilt.get(lead.url)
+            if ready is not None:
+                out.append(ready)
+                continue
+            # Hacker News posts ARE the description -- there is no separate page
+            # to fetch, so use the body already carried on the lead.
+            description = (getattr(lead, "text", "") or "").strip()
+            if not description:
+                description = boards.fetch_lead_description(client, lead)
+            if not description or len(description) < 200:
+                # No usable body means nothing to score against. Better to drop
+                # it than to queue a posting the rubric cannot read.
+                continue
+            salary_raw = boards.salary_from_card(client, lead)
+            smin, smax = parse_salary(salary_raw) if salary_raw else (None, None)
+            city, region, country = parse_location(lead.location)
+            out.append(Posting(
+                source_id=f"{lead.board}:{lead.job_id or lead.url}",
+                company=clean(lead.company),
+                title=clean(lead.title),
+                url=lead.url,
+                apply_url=lead.url,
+                ats=lead.board,
+                source_slug=lead.board,
+                location_raw=lead.location or "",
+                city=city,
+                region=region,
+                country=country,
+                workplace_type=parse_work_model(None, None, lead.location, description),
+                published_at=lead.posted_at,
+                # The board states a date on the card, but it is a relative
+                # "2 weeks ago" rendered to a date, so it is weaker than an ATS
+                # timestamp. Block G surfaces low confidence to Doran.
+                date_confidence="low" if lead.posted_at else "none",
+                description=description,
+                salary_raw=salary_raw or None,
+                salary_min=smin,
+                salary_max=smax,
+            ))
+
+    notes.append(
+        f"boards: {len(out)} posting(s) read from the board's live page because "
+        f"their employer has no reachable ATS ({len(leads)} attempted)"
+    )
+    return out

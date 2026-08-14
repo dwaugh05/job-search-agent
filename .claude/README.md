@@ -37,7 +37,8 @@ are repairing state, debugging, or a workflow explicitly tells you to.
 | --- | --- |
 | `python cli.py init` | Creates the SQLite database at `data/jobs.db`. Idempotent — every other command calls it implicitly where it matters. |
 | `python cli.py verify-sources` | Probes every company in `config/sources.yml`, marks each `live`/`dead`, resolves unknown slugs, writes the file back. Exits **non-zero if under 70% live**. |
-| `python cli.py resolve-company "DoorDash"` | Finds a company's live ATS board by probing real APIs with slug variants. Slugs are unguessable (DoorDash is `doordashusa` on Greenhouse) — never hand-edit one. |
+| `python cli.py resolve-company "DoorDash"` | Finds a company's live ATS board. Tries three routes in cost order: the local slug index, then ~45 blind slug probes, then reading the ATS link off the company's own careers page. Slugs are unguessable (DoorDash is `doordashusa`) — never hand-edit one. |
+| `python cli.py refresh-tokens` | Rebuilds the local index of ~29,000 ATS board slugs that actually exist, from public Common Crawl datasets. Resolution consults it first, which is why it finds boards that guessing never could. Re-run every few months. |
 
 Flags: `verify-sources --force` re-resolves even known slugs.
 `resolve-company --save` caches into `sources.yml`, `--watch` also adds it to the
@@ -186,6 +187,21 @@ And before asking Doran for any feedback on scoring quality:
   shows many "unknown location" rejections, that is the cause.
 - **Never run `taskkill`, `kill`, or any process-killing command.** Ask Doran to
   stop a server manually.
+- **Board discovery runs three channels, all automatic in a broad scan.** LinkedIn's
+  public guest search, Built In (via `browser_boards` in `sources.yml`), and the
+  monthly Hacker News "Who is hiring" thread. All three produce *leads*; the
+  posting itself still comes from the employer's live ATS wherever one is
+  reachable. `--no-boards` disables all three.
+- **A lead whose employer has no reachable ATS is no longer dropped.** Its body is
+  read from the board's own live page at scan time. Never from a snapshot.
+- **Scans are deliberately slow.** `politeness` in `profile.yml` caps requests at
+  ~3/second/host with exponential backoff on 429s. Getting blocked by Greenhouse
+  would outlast the run that caused it, so raise
+  `min_seconds_between_requests_per_host` first if a provider ever complains.
+- **An "evergreen_or_reposted" flag is not a bug.** Greenhouse's own data puts
+  18-22% of ATS postings in the ghost category and reposting resets the visible
+  date, so a posting we have watched for longer than `evergreen_days` is flagged
+  even when its feed claims to be fresh. It flags, never rejects.
 - **There is no `apply` command and there never will be.** See the hard rules in
   `CLAUDE.md`.
 

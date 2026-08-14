@@ -62,6 +62,13 @@ hard_gates:
   # to the ceiling anchor -- and was dropped for being 21 days old. Roles in this
   # archetype are rare enough that a tight window costs more than it saves.
   freshness_days: 30
+  # A posting we have personally been watching for longer than this, while its
+  # feed still claims to be fresh, is flagged as evergreen or reposted -- not
+  # rejected. Greenhouse's own published data puts 18-22% of postings in its ATS
+  # in the ghost category, Ashby ships evergreen reqs as a documented feature,
+  # and reposting resets the visible publish date. Our own first_seen is the
+  # only date nobody can rewrite.
+  evergreen_days: 75
   max_commute_minutes: 60         # door-to-door from 94403
   relocation_required: reject
   # Doran wants more leadership but not a VP seat -- that is over-reach, and the
@@ -153,3 +160,42 @@ review:
   # hidden from me completely." Hard-capped so it cannot become spray-and-pray.
   worth_knowing_floor: 3.7
   max_worth_knowing: 3
+
+# How hard we are allowed to lean on other people's servers.
+#
+# Getting blocked by Greenhouse, Ashby or Lever would break this entire workflow,
+# and the block would outlast the run that caused it. Doran, 2026-08-14: "I'm
+# happy to have this run for a few hours overnight and not in a rush." So these
+# defaults trade speed for safety on purpose -- a slow scan is an inconvenience,
+# a blocked scan is a dead tool.
+#
+# All of it is enforced in Python, in sources/registry.py. None of it consumes
+# Claude tokens: the waiting happens inside the scan process, not in a
+# conversation loop.
+politeness:
+  # Minimum gap between two requests to the SAME host. Enforced across all
+  # worker threads, so ~3 requests/second/host at the default. Raise this first
+  # if a provider ever starts returning 429s.
+  min_seconds_between_requests_per_host: 0.34
+  # Threads working across DIFFERENT hosts. Safe to raise, because the per-host
+  # limiter above still serialises any single provider.
+  max_workers: 8
+  # On 429/503/5xx: wait base * 2^attempt, capped, and honour Retry-After when
+  # the server sends one. 2s, 4s, 8s, 16s, 32s by default.
+  backoff_base_seconds: 2.0
+  # Applies to genuine 429s only. Kept well below the old 120s: a single slow
+  # host must never be able to stall a whole scan, and anything longer than this
+  # is better handled by the next run than by waiting.
+  backoff_max_seconds: 30.0
+  rate_limit_retries: 3
+  # Consecutive timeouts before a host is abandoned for the rest of the run.
+  # Slug probing sends nine requests per ATS per company; with the per-host
+  # throttle serialising them, one unresponsive provider turns into thirteen
+  # minutes of dead waiting per company. Observed with apply.workable.com.
+  host_failure_limit: 3
+  # How many previously-unknown employers a single broad scan may resolve to a
+  # live ATS. Each one costs up to ~45 probe requests, and every company added
+  # is swept on every future run -- so this throttles permanent growth of the
+  # evaluation queue, not just this run's traffic. Raised 30 -> 60 on
+  # 2026-08-14 at Doran's request.
+  board_resolve_cap: 60

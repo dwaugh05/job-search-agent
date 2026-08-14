@@ -1108,6 +1108,26 @@ companies:
   slug: corcepttherapeutics
   status: live
   watch: true
+- name: Qualys
+  ats: workday
+  slug: qualys:wd5:Careers
+  status: live
+  watch: true
+- name: Genesys
+  ats: workday
+  slug: genesys:wd1:Genesys
+  status: live
+  watch: true
+- name: Imperva
+  ats: workday
+  slug: thales:wd3:Careers
+  status: live
+  watch: true
+- name: Asurion
+  ats: workday
+  slug: asurion:wd5:asurioncareers_us
+  status: live
+  watch: true
 browser_boards:
 - key: builtin_sf
   label: Built In SF

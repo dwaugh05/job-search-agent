@@ -603,6 +603,7 @@ def evaluate(
     enforce_freshness: bool = True,
     freshness_days: int | None = None,
     first_sighting: bool = True,
+    first_seen: str | None = None,
 ) -> PrefilterResult:
     """Run every gate. `posting` is a Posting dataclass OR a sqlite3.Row."""
     gates = config.profile().get("hard_gates", {})
@@ -625,6 +626,22 @@ def evaluate(
             flags.append("no_publish_date")
         elif age > window:
             return PrefilterResult(False, f"published {age:.0f} days ago (window {window})")
+
+        # Evergreen / repost detection. A feed can claim a posting is days old
+        # while we have been watching the identical req for months -- reposting
+        # resets the visible publish date, and Ashby's "evergreen" reqs never
+        # close at all. Our own first sighting is the one date that cannot be
+        # rewritten, so when the two disagree badly, say so. This FLAGS rather
+        # than rejects: an evergreen req is often still a real job, it just is
+        # not the fresh opening the date implies.
+        evergreen_after = gates.get("evergreen_days", 75)
+        watched = age_days(first_seen)
+        if watched is not None and evergreen_after and watched > evergreen_after:
+            if age is not None and watched - age > evergreen_after / 2:
+                flags.append(
+                    f"evergreen_or_reposted (first seen {watched:.0f} days ago, "
+                    f"feed claims {age:.0f})"
+                )
 
     # 3. Title band -- VP+ is over-reach, per profile.yml.
     band = _title_band_rejected(title)

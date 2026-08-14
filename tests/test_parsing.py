@@ -241,6 +241,169 @@ for _track in _config.TRACKS:
           sum(d["weight"] for d in _sc["dimensions"]), 100)
     check(f"{_track} has 10 dimensions", len(_sc["dimensions"]), 10)
 
+# ---------------------------------------------------------------------------
+# ATS link sniffing. This is the fallback that finds a board when slug guessing
+# fails; it is the ONLY route to Workday employers, whose slug is a
+# tenant:instance:site triple that cannot be guessed. A regression here silently
+# returns whole companies to being undiscoverable.
+from careerops.sources import sniff as _sniff  # noqa: E402
+
+check("greenhouse link is extracted",
+      _sniff.find_ats_links('<a href="https://boards.greenhouse.io/acme/jobs/1">x</a>'),
+      [("greenhouse", "acme")])
+check("job-boards.greenhouse.io variant is extracted",
+      _sniff.find_ats_links('<a href="https://job-boards.greenhouse.io/acme">x</a>'),
+      [("greenhouse", "acme")])
+check("ashby link is extracted",
+      _sniff.find_ats_links('href="https://jobs.ashbyhq.com/acme/abc"'),
+      [("ashby", "acme")])
+check("lever link is extracted",
+      _sniff.find_ats_links('href="https://jobs.lever.co/acme"'),
+      [("lever", "acme")])
+check("smartrecruiters link is extracted",
+      _sniff.find_ats_links('href="https://careers.smartrecruiters.com/Acme"'),
+      [("smartrecruiters", "acme")])
+check("workable link is extracted",
+      _sniff.find_ats_links('href="https://apply.workable.com/acme/"'),
+      [("workable", "acme")])
+# Workday is the whole point of this module.
+check("workday triple is packed as tenant:instance:site",
+      _sniff.find_ats_links('href="https://qualys.wd5.myworkdayjobs.com/Careers"'),
+      [("workday", "qualys:wd5:Careers")])
+check("workday cxs URL form also parses",
+      _sniff.find_ats_links(
+          'https://gilead.wd1.myworkdayjobs.com/wday/cxs/gilead/gileadcareers/jobs'),
+      [("workday", "gilead:wd1:gileadcareers")])
+# A page with no ATS anywhere must return nothing rather than a bad guess.
+check("page with no ATS link yields nothing",
+      _sniff.find_ats_links("<html><body><p>We are hiring!</p></body></html>"), [])
+# Vendor-owned paths are not customer slugs.
+check("vendor noise slugs are rejected",
+      _sniff.find_ats_links('href="https://boards.greenhouse.io/embed/job_board?for=acme"'),
+      [("greenhouse", "acme")])
+check("empty ashby slug is rejected",
+      _sniff.find_ats_links('href="https://jobs.ashbyhq.com/"'), [])
+# Domain guessing should strip corporate suffixes.
+check("domain guess strips 'Software' suffix",
+      "guidewire.com" in _sniff.domain_candidates("Guidewire Software"), True)
+check("careers subdomains are generated",
+      "metacareers.com" in _sniff.subdomain_candidates("Meta"), True)
+check("careers link is followed cross-domain",
+      _sniff.careers_links('<a href="https://metacareers.com/jobs">Careers</a>',
+                           "https://meta.com/"),
+      ["https://metacareers.com/jobs"])
+check("non-careers links are ignored",
+      _sniff.careers_links('<a href="/pricing">Pricing</a>', "https://acme.com/"), [])
+
+# ---------------------------------------------------------------------------
+# Built In adapter. Its JobPosting sits in page JavaScript, not an ld+json tag,
+# so the brace matcher has to skip SIBLING objects to find the real one -- the
+# first version silently returned {"@type":"Organization"} and parsed nothing.
+from careerops.sources import builtin as _builtin  # noqa: E402
+
+_SAMPLE = (
+    'var x = {"@type":"Other","name":"decoy"}; '
+    'window.job = {"@type":"JobPosting","title":"AI Enablement Lead",'
+    '"applicantLocationRequirements":{"@type":"Country","name":"USA"},'
+    '"hiringOrganization":{"@type":"Organization","name":"Acme"},'
+    '"datePosted":"2026-08-01","description":"<p>Braces {like this} inside</p>"};'
+)
+_parsed = _builtin._slice_json_object(_SAMPLE, _SAMPLE.find("hiringOrganization"))
+check("builtin finds the JobPosting, not a sibling object",
+      isinstance(_parsed, dict) and _parsed.get("@type"), "JobPosting")
+check("builtin reads the employer name",
+      (_parsed or {}).get("hiringOrganization", {}).get("name"), "Acme")
+check("builtin survives braces inside the HTML description",
+      "{like this}" in str((_parsed or {}).get("description")), True)
+check("builtin returns None when there is no JobPosting",
+      _builtin._slice_json_object('{"@type":"Organization","name":"x"}', 5), None)
+
+# ---------------------------------------------------------------------------
+# Hacker News "Who is hiring" parsing. These posts are prose with no title
+# field, so a regression here silently drops the highest-signal AI/startup
+# channel entirely -- every lead would fail the archetype screen.
+from careerops.sources.hn import parse_comment as _hn_parse  # noqa: E402
+from careerops.pipeline import _lead_haystack as _hay  # noqa: E402
+from careerops.pipeline import _LEAD_WORTH_RESOLVING as _screen  # noqa: E402
+
+_hn_lead = _hn_parse(
+    "<p>Acme AI | Head of AI Enablement | Remote (US) | Full Time</p>"
+    "<p>We are building agentic workflows for marketing teams and need someone "
+    "to drive adoption across the whole organisation.</p>", 123)
+check("hn extracts the company", _hn_lead.company, "Acme AI")
+check("hn extracts the role", _hn_lead.title, "Head of AI Enablement")
+check("hn extracts the location", _hn_lead.location, "Remote (US)")
+check("hn body is screened, not just the title",
+      bool(_screen.search(_hay(_hn_lead))), True)
+check("hn drops a too-short post",
+      _hn_parse("<p>hiring</p>", 1), None)
+check("hn drops a post with no pipe convention",
+      _hn_parse("<p>" + ("we are hiring engineers in london " * 6) + "</p>", 2), None)
+# A company name swallowed by its own tagline was the first parse bug.
+_tagline = _hn_parse(
+    "<p>Globex - we make widgets | Staff AI Solutions Engineer | Remote</p>"
+    "<p>" + ("Build and ship agentic tooling for internal teams. " * 4) + "</p>", 3)
+check("hn strips a trailing tagline from the company", _tagline.company, "Globex")
+
+# ---------------------------------------------------------------------------
+# Evergreen / repost detection. Greenhouse's own data puts 18-22% of ATS
+# postings in the ghost category and Ashby ships evergreen reqs as a feature, so
+# a feed claiming "3 days ago" about a req we have watched for 200 days must say
+# so. Flags, never rejects -- an evergreen req is often still a real job.
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+from careerops import prefilter as _pf  # noqa: E402
+from careerops.models import Posting as _P  # noqa: E402
+
+def _evergreen_flags(published_days: int, watched_days: int | None):
+    now = _dt.now(_tz.utc)
+    posting = _P(
+        source_id="x", company="Acme", title="AI Enablement Lead", url="u",
+        ats="greenhouse", is_remote=True, workplace_type="Remote",
+        location_raw="Remote, United States", salary_min=200000, salary_max=250000,
+        description=("Own AI enablement and adoption for the marketing organization. "
+                     "Build agentic workflows, run training, upskill marketers, "
+                     "human in the loop. ") * 8,
+        published_at=(now - _td(days=published_days)).date().isoformat(),
+    )
+    seen = None if watched_days is None else (now - _td(days=watched_days)).isoformat()
+    result = _pf.evaluate(posting, suppressed=set(), posting_fingerprint="fp",
+                          first_sighting=watched_days is None, first_seen=seen)
+    return result.passed, [f for f in result.flags if "evergreen" in f]
+
+_passed, _flags = _evergreen_flags(3, 200)
+check("evergreen: long-watched req is flagged", len(_flags), 1)
+check("evergreen: flagged but NOT rejected", _passed, True)
+_passed, _flags = _evergreen_flags(3, 5)
+check("evergreen: genuinely new req is not flagged", _flags, [])
+_passed, _flags = _evergreen_flags(3, None)
+check("evergreen: first sighting is not flagged", _flags, [])
+
+# ---------------------------------------------------------------------------
+# ATS slug index. Guards the false positive found in testing: "Qualys" matched
+# the slug "qualysoft" -- a different company -- and would have ingested 80 of
+# somebody else's postings. A wrong board is worse than no board, because
+# nothing downstream catches it.
+from careerops.sources import tokens as _tok  # noqa: E402
+
+_tok._INDEX = {
+    "qualys": [("workday", "qualys:wd5:careers")],
+    "qualysoft": [("lever", "qualysoft")],
+    "guidewire": [("lever", "guidewire")],
+    "ziplines": [("ashby", "ziplines")],
+    "doordashusa": [("greenhouse", "doordashusa")],
+}
+check("index: exact match wins", _tok.lookup("Qualys"),
+      [("workday", "qualys:wd5:careers")])
+check("index: a longer different company is NOT matched",
+      ("lever", "qualysoft") in _tok.lookup("Qualys"), False)
+check("index: slug shortened from the name still matches",
+      _tok.lookup("Guidewire Software"), [("lever", "guidewire")])
+check("index: a one-character suffix still matches",
+      _tok.lookup("Zipline"), [("ashby", "ziplines")])
+check("index: unknown company returns nothing", _tok.lookup("Nonexistent Corp"), [])
+check("index: empty name returns nothing", _tok.lookup(""), [])
+_tok._INDEX = None  # let real lookups reload the cache
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURE(S):\n")

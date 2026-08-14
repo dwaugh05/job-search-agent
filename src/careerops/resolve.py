@@ -17,7 +17,10 @@ import re
 from dataclasses import dataclass, field
 
 from . import config
-from .sources.registry import ADAPTERS, PROBE_ORDER, _client, probe_detailed
+from .sources import sniff, tokens
+from .sources.registry import (
+    ADAPTERS, PROBE_ORDER, _client, _squash, fetch_company, probe_detailed,
+)
 
 # Slugs that no naming rule would ever produce.
 ALIASES: dict[str, list[str]] = {
@@ -115,8 +118,16 @@ def slug_candidates(company: str) -> list[str]:
     return out[:10]
 
 
-def resolve(company: str, *, force: bool = False) -> Resolution:
-    """Find a live board for `company`. Checks the cache unless force=True."""
+def resolve(company: str, *, force: bool = False, deep: bool = True) -> Resolution:
+    """Find a live board for `company`. Checks the cache unless force=True.
+
+    `deep` controls how hard the last-resort careers-page read tries. Reading a
+    careers page is cheap when it succeeds and expensive when it does not --
+    a dozen URL guesses, then a headless browser render for each plausible page.
+    That is fine for one company at the command line, and ruinous in a scan
+    resolving sixty unknown employers, where it measured out at minutes each.
+    So bulk callers pass deep=False: same lookup, no browser, fewer guesses.
+    """
     data = config.sources()
     entries = data.get("companies", []) or []
 
@@ -130,6 +141,28 @@ def resolve(company: str, *, force: bool = False) -> Resolution:
                         slug=entry["slug"],
                         status="live",
                         note="cache hit (no probes issued)",
+                    )
+
+    # Cheapest route first: a local index of ~29k board slugs that actually
+    # exist, derived from Common Crawl. Guessing costs ~45 requests and finds
+    # roughly a third of companies, because a slug is not derivable from a name
+    # -- DoorDash is `doordashusa`, Zipline is `ziplines`. A lookup costs one
+    # probe per candidate and finds them outright.
+    indexed = tokens.lookup(company)
+    if indexed:
+        with _client() as client:
+            for ats, slug in indexed:
+                if ats not in ADAPTERS:
+                    continue
+                try:
+                    ok, count, verified = probe_detailed(ats, slug, client, company)
+                except Exception:
+                    continue
+                if ok and verified:
+                    return Resolution(
+                        company=company, ats=ats, slug=slug, status="live",
+                        job_count=count, verified=True, candidates_tried=1,
+                        note="matched a known board slug from the local ATS index",
                     )
 
     candidates = slug_candidates(company)
@@ -163,11 +196,66 @@ def resolve(company: str, *, force: bool = False) -> Resolution:
 
     result = Resolution(company=company, candidates_tried=len(pairs))
     if not hits:
+        # Slug guessing has failed. Before giving up, read the board address off
+        # the company's own careers page. This is the only route to Workday
+        # employers at all -- their slug is a tenant:instance:site triple that is
+        # discovered, never guessed, so they are invisible to the probe loop.
+        sniffed = sniff.sniff(
+            company,
+            use_browser=deep,
+            max_pages=12 if deep else 6,
+            # One company at the CLI can afford to be thorough. Sixty of them in
+            # a scan cannot: unbounded, this phase took over five minutes per
+            # failed company and dominated the entire run.
+            budget_seconds=60.0 if deep else 12.0,
+        )
+        if sniffed:
+            ats, slug = sniffed
+            postings = []
+            try:
+                postings = fetch_company(ats, slug, company)
+            except Exception:
+                postings = []
+            if postings:
+                result.ats = ats
+                result.slug = slug
+                result.job_count = len(postings)
+                result.all_hits = [(ats, slug, len(postings))]
+                # Same verification bar the probe path uses. A careers page can
+                # link to a PARENT company's board -- Imperva's links to Thales
+                # -- and accepting that unchecked would ingest thousands of
+                # someone else's postings under this company's name.
+                blob = _squash(" ".join(
+                    f"{p.company} {p.title} {(p.description or '')[:400]}"
+                    for p in postings[:40]
+                ))
+                wanted = _squash(company)
+                result.verified = bool(
+                    wanted and (wanted in blob
+                                or (len(wanted) > 5 and wanted[:6] in blob))
+                )
+                if result.verified:
+                    result.status = "live"
+                    result.note = (
+                        "slug probing failed; found this board linked from the "
+                        "company's own careers page, and its postings name "
+                        f"{company}"
+                    )
+                else:
+                    result.status = "unverified"
+                    result.note = (
+                        f"careers page links to {ats}/{slug}, which returns "
+                        f"{len(postings)} postings, but none of them mention "
+                        f"'{company}'. This is probably a parent or sister "
+                        "company's board - confirm before trusting it."
+                    )
+                return result
+
         result.status = "dead"
         result.note = (
             f"No live board found across {len(probe_order)} ATS x "
-            f"{len(candidates)} slug variants. Try the Chrome fallback "
-            "(open the careers page and read the ATS off the URL)."
+            f"{len(candidates)} slug variants, and no ATS link was readable on "
+            "the company's careers page (it may be JavaScript-rendered)."
         )
         return result
 

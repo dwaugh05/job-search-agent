@@ -86,6 +86,30 @@ produce different scores for the same posting, that is a bug.
   queue, then writes scores back to SQLite via `cli.py record-eval`.
 - **SQLite (`data/jobs.db`) is the source of truth**, not the conversation.
 
+## How to communicate with Doran
+
+**He will not read a long message. Assume he reads the first few lines and the
+bold bits.** Do not build later messages on the assumption that he absorbed an
+earlier one — he told me directly, 2026-08-14: *"Don't recall that exactly When
+you're expecting me to read everything, which I just don't do."*
+
+Rules:
+
+1. **Lead with the decision he has to make**, not the reasoning that produced it.
+   Reasoning goes below, or nowhere.
+2. **One question at a time.** If several are open, ask the most important and
+   hold the rest. A list of four questions gets zero answered.
+3. **Never refer back to a previous message by name** ("the fallback I mentioned",
+   "as discussed above"). Re-explain in one sentence, every time, from scratch.
+4. **No jargon without a plain-English gloss on the same line.** "Per-run cap",
+   "resolution fallback" and "scope modifier" all failed this test.
+5. **Say what it costs him** — his time, his tokens, his money — whenever
+   proposing work. He is actively conscious of Anthropic token spend and prefers
+   a programmatic (Python) solution over a Claude-in-the-loop one wherever both
+   would work.
+6. Long output is fine when he asked for a *document* (a report, a rubric, a
+   file). It is not fine in conversation.
+
 ## Server management
 
 **NEVER run `taskkill`, `kill`, or any process-killing command.** If a server

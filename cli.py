@@ -466,6 +466,24 @@ def cmd_prefilter_pending(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_refresh_tokens(args: argparse.Namespace) -> int:
+    """Rebuild the local index of ATS board slugs that actually exist.
+
+    Resolution guesses slugs otherwise, which finds roughly a third of companies
+    because a slug is not derivable from a name. Worth re-running every few
+    months; the underlying datasets are updated upstream, not by us.
+    """
+    from careerops.sources import tokens
+
+    counts = tokens.refresh(on_note=lambda note: print(f"  {note}"))
+    if not counts:
+        print("Could not download any slug lists - index left unchanged.")
+        return 1
+    print(f"\n  {tokens.size()} board slugs cached to {tokens.CACHE}")
+    print(f"  {tokens.ATTRIBUTION}")
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     """Regression test the rubric against the five anchors."""
     from careerops.calibrate import run_calibration
@@ -567,6 +585,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--check", action="store_true",
                    help="verify recorded scores without re-queuing")
     p.set_defaults(func=cmd_calibrate)
+
+    p = sub.add_parser(
+        "refresh-tokens",
+        help="download the local ATS slug index used to resolve companies cheaply")
+    p.set_defaults(func=cmd_refresh_tokens)
 
     p = sub.add_parser("add-rule", help="append a learned rule")
     p.add_argument("rule")

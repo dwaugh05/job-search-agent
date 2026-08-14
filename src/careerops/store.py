@@ -400,6 +400,21 @@ def record_evaluation(
     return int(cur.lastrowid)
 
 
+def first_seen_of(conn: sqlite3.Connection, posting_id: int) -> str | None:
+    """When this tool first saw this posting, regardless of what the feed claims.
+
+    This is the one date nobody can rewrite. Greenhouse's own published figures
+    put 18-22% of ATS postings in the ghost category, Ashby ships "evergreen"
+    reqs as a feature, and reposting a job resets its visible publish date -- so
+    a feed's `published_at` can say "3 days ago" about a req that has been open
+    all year. Our own first sighting cannot lie about that.
+    """
+    row = conn.execute(
+        "SELECT first_seen FROM postings WHERE id = ?", (posting_id,)
+    ).fetchone()
+    return row["first_seen"] if row else None
+
+
 def latest_evaluation(conn: sqlite3.Connection, posting_id: int) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM evaluations WHERE posting_id = ? ORDER BY id DESC LIMIT 1",
