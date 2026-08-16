@@ -74,7 +74,7 @@ apply_url, work_model, is_remote, source, board, id`.
 | Command | What it does |
 | --- | --- |
 | `python cli.py record-eval --file scores.json` | Writes A-G dimension scores back to SQLite. Applies the evidence cap, redistributes weight for null dimensions, applies scope/bonus modifiers, then stores the weighted score. |
-| `python cli.py report` | Renders the seven-field match list, the growth-marketing backup list, and the "Worth knowing about" tier. |
+| `python cli.py report` | Renders the seven-field match list, the growth-marketing backup list, and the "Worth knowing about" tier. Adds an **Estimated Commute** line to hybrid and on-site postings, and archives the printed output verbatim to `data/reports/results-YYYY-MM-DD_HHMM.md`. |
 
 `record-eval` flags: `--run N` tags the evaluations to a run,
 `--track ai_enablement|growth_marketing` picks which list the scores belong to
@@ -98,6 +98,29 @@ near-miss lines for those companies, `--run N` tags the written report file,
 > **`report` is destructive to the candidate pool.** Everything it prints across
 > both lists is marked presented and will never appear in a future scan again.
 > Use `--no-mark` for a dry run.
+
+Two things `report` does that were added on 2026-08-15 at Doran's request:
+
+- **Estimated Commute**, an eighth field, on hybrid and on-site postings only.
+  Pulled from `config/commute.yml` via `report.commute_field()`. A city missing
+  from that file prints "unknown … not in config/commute.yml" rather than a
+  guess — add the city and re-run. Remote postings get no line.
+- **Verbatim archive.** The exact printed output is written to
+  `data/reports/results-YYYY-MM-DD_HHMM.md` and the path is printed. Doran wants
+  results in both the session and a file he can go back to, so still show him the
+  full report — the archive is not a hand-off. Never hand-write that file; if it
+  and the session ever disagree, the process has failed.
+
+To regenerate a report for postings already marked presented, reset them first —
+`report` skips anything in state `presented`:
+
+```
+python -c "import sys; sys.path.insert(0,'src'); from careerops import store; \
+  conn=store.connect(); ids=[r[0] for r in conn.execute( \
+  'SELECT posting_id FROM presentations WHERE run_id=?', (RUN,)).fetchall()]; \
+  [store.set_state(conn,i,'evaluated') for i in ids]; \
+  conn.execute('DELETE FROM presentations WHERE run_id=?', (RUN,)); conn.commit()"
+```
 
 ### Verdicts and learning
 

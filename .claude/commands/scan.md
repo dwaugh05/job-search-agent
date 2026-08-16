@@ -85,6 +85,34 @@ City, Salary Range, Work Model, **Posted date**, Fit Summary — plus the "Worth
 knowing about" tier beneath. Postings are marked as presented at this point and
 will never appear in a future scan.
 
+**Estimated Commute is an eighth field, and it appears on hybrid and on-site
+postings only.** `cli.py report` adds it automatically from `config/commute.yml`,
+so it is already in the rendered output — do not strip it and do not add it by
+hand to a remote role. Doran asked for this on 2026-08-15: "Hybrid" or "On-site"
+on its own is not actionable, because San Carlos and San Francisco are both a
+word until one of them is 14 minutes and the other is 55. If a city is missing
+from `commute.yml` the line says so rather than guessing; add the city to the
+file and re-run rather than estimating in prose.
+
+**The report is also archived verbatim.** `cli.py report` writes the exact
+printed output to `data/reports/results-YYYY-MM-DD_HHMM.md` and prints the path.
+This is not optional and not a substitute for showing him the report — Doran
+asked on 2026-08-15 for it in **both** places, the session and the file, because
+the session scrolls away and the report is the thing he re-reads. Two rules:
+
+- **Show him the full report in the session as well.** The file is an archive,
+  not a hand-off. Never reply with just a path.
+- **Never hand-write the markdown file.** It comes out of `cli.py report`, so the
+  file and what he read cannot drift apart. If you need to regenerate it for a
+  run whose postings were already marked as presented, reset them first rather
+  than re-typing the report:
+
+  ```
+  python cli.py report --run <run_id>        # normal path, writes the archive
+  ```
+
+Give him the archive path when you present the results.
+
 Then tell Doran he can respond with `/feedback` to rule on what he just saw.
 
 ## Fit Summary style — this is the part he cares most about
@@ -97,7 +125,9 @@ Doran confirmed this format works, so do not drift from it. Two paragraphs:
    tracker. Quote the posting where a phrase carries real weight.
 2. **What to weigh against it.** Commute in minutes and days per week, where the
    compensation top-end lands, seniority band, coding bar, distance from
-   marketing. Plainly, no hedging.
+   marketing. Plainly, no hedging. State the commute in minutes here too on any
+   hybrid or on-site role — the Estimated Commute field gives him the number, and
+   this paragraph tells him what it costs him.
 
 Write to him in the second person. Full guidance in `rubric/rubric-A-G.md`.
 

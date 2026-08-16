@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -278,7 +279,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             near = [r for r in store.near_misses(conn, threshold, names)
                     if r["company"].lower() not in shown]
 
-        print(report.render_both_lists(matches, backup))
+        # Built as one string, then printed AND archived, so the markdown file
+        # is byte-for-byte what Doran saw rather than a second rendering of it.
+        parts = [report.render_both_lists(matches, backup)]
 
         # Anything just under the bar gets a one-line mention rather than being
         # silently dropped -- Doran asked explicitly not to have near-misses
@@ -290,13 +293,21 @@ def cmd_report(args: argparse.Namespace) -> int:
         worth = [r for r in store.worth_knowing(conn, threshold, floor, cap)
                  if r["id"] not in shown_ids]
         if worth:
-            print(report.render_worth_knowing(worth))
+            parts.append(report.render_worth_knowing(worth))
 
         if near:
-            print(report.render_near_misses(near))
+            parts.append(report.render_near_misses(near))
+
+        presented = "\n".join(parts)
+        print(presented)
 
         run = store.latest_run(conn)
         run_id = args.run or (run["id"] if run else 0)
+
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+        archive = report.write_presented_report(presented, run_id=run_id, stamp=stamp)
+        print(f"\n[saved verbatim: {archive}]")
+
         if matches or near:
             path = report.write_run_report(
                 conn, run_id, matches, mode="report",

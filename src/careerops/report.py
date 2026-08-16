@@ -17,8 +17,10 @@ import json
 import sqlite3
 from pathlib import Path
 
+from . import commute as commute_mod
 from . import comp as comp_mod
 from . import config, store
+from .models import WORK_REMOTE
 from .normalize import age_days
 
 FIELDS_NOTE = (
@@ -48,11 +50,31 @@ def _posted_field(row: sqlite3.Row) -> str:
     return f"{stamp} ({age:.0f} days ago)" if age is not None else stamp
 
 
+def commute_field(row: sqlite3.Row) -> str | None:
+    """One-line commute estimate, for hybrid and on-site roles only.
+
+    Doran asked for this on 2026-08-15: a work model of "Hybrid" or "On-site"
+    is not actionable on its own, because a San Carlos office and a San
+    Francisco office are the same word and a 40-minute difference. Remote roles
+    return None -- there is nothing to state.
+    """
+    if row["work_model"] == WORK_REMOTE:
+        return None
+    result = commute_mod.evaluate(row["city"], row["work_model"])
+    if not result.known:
+        city = row["city"] or row["location_raw"] or "this location"
+        return (f"Estimated Commute: unknown for {city} - not in config/commute.yml, "
+                "so this is unscored rather than assumed")
+    return f"Estimated Commute: {result.minutes} min door-to-door from San Mateo 94403"
+
+
 def render_matches(rows: list[sqlite3.Row]) -> str:
     """The match list Doran reads.
 
-    Seven fields. Posted date was added at his request -- knowing a posting is 3
-    days old versus 28 changes how urgently he acts on it.
+    Seven fields, plus an eighth on hybrid and on-site roles only: the estimated
+    commute in minutes. Posted date was added at his request -- knowing a posting
+    is 3 days old versus 28 changes how urgently he acts on it -- and the commute
+    line for the same reason, on 2026-08-15.
     """
     if not rows:
         return "No postings scored 4.0 or higher this run."
@@ -65,6 +87,11 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
             f"City: {row['city'] or row['location_raw'] or 'Not stated'}",
             f"Salary Range: {_salary_field(row)}",
             f"Work Model: {row['work_model'] or 'Not stated'}",
+        ]
+        commute_line = commute_field(row)
+        if commute_line:
+            block.append(commute_line)
+        block += [
             f"Posted: {_posted_field(row)}",
             f"Fit Summary: {(row['fit_summary'] or '').strip()}",
         ]
@@ -133,9 +160,13 @@ def render_worth_knowing(rows: list[sqlite3.Row]) -> str:
         return ""
     lines = ["", "Worth knowing about (scored just under 4.0 - not recommendations):"]
     for row in rows:
+        model = row["work_model"] or "?"
+        if row["work_model"] != WORK_REMOTE:
+            result = commute_mod.evaluate(row["city"], row["work_model"])
+            model += f" {result.minutes} min" if result.known else " commute unknown"
         lines.append(
             f"  - {row['weighted_score']:.2f}  {row['title']} @ {row['company']}"
-            f"  [{row['work_model'] or '?'}, posted {str(row['published_at'] or '')[:10]}]"
+            f"  [{model}, posted {str(row['published_at'] or '')[:10]}]"
         )
         lines.append(f"      {row['url']}")
         summary = (row["fit_summary"] or "").strip()
@@ -156,6 +187,32 @@ def render_near_misses(rows: list[sqlite3.Row]) -> str:
             f"best was {row['best_score']:.1f} ({row['title']})"
         )
     return "\n".join(lines)
+
+
+REPORTS_DIR = config.DATA_DIR / "reports"
+
+
+def write_presented_report(text: str, *, run_id: int, stamp: str) -> Path:
+    """Archive the terminal output verbatim to a timestamped markdown file.
+
+    Doran asked for this on 2026-08-15: the report is the thing he actually
+    re-reads, and until now it only existed in a chat session that scrolls away.
+    The body is byte-for-byte what was printed -- no re-summarising, no
+    reordering, no trimming -- so the file and the session can never disagree.
+    """
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORTS_DIR / f"results-{stamp}.md"
+    day, _, clock = stamp.partition("_")
+    pretty = f"{day} at {clock[:2]}:{clock[2:]}" if clock else day
+    header = [
+        f"# Career-Ops results - {pretty}",
+        "",
+        f"Run {run_id}. Verbatim copy of the report as presented.",
+        "",
+        "```",
+    ]
+    path.write_text("\n".join(header) + "\n" + text + "\n```\n", encoding="utf-8")
+    return path
 
 
 def write_run_report(

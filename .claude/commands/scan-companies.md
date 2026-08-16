@@ -65,6 +65,18 @@ python cli.py report --run <run_id> --companies "$ARGUMENTS"
 Print the seven-field list for anything scoring 4.0+ — including the **posted
 date**, which he asked for specifically.
 
+Two things `cli.py report` now does for you, both added on Doran's instruction on
+2026-08-15. Do not strip either, and do not reproduce either by hand:
+
+- **Estimated Commute**, an eighth field on hybrid and on-site postings only,
+  taken from `config/commute.yml`. A work model without a number is not
+  actionable to him. Remote roles do not get the line.
+- **A verbatim archive** at `data/reports/results-YYYY-MM-DD_HHMM.md`, with the
+  path printed at the end of the run. He wants the results in **both** places —
+  the session and the file — so still print the full report here, and give him
+  the path alongside it. Never reply with just the path, and never hand-write the
+  file.
+
 Then the "Worth knowing about" tier (3.7–4.0), then the near-miss lines. The
 near-miss section is unique to targeted scans: if a company Doran named has nothing
 above 4.0, he gets one line saying what was there and why it fell short. Knowing a
