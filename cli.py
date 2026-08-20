@@ -15,13 +15,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from careerops import config, pipeline, report, resolve, store  # noqa: E402
+from careerops import applications, config, pipeline, report, resolve, store  # noqa: E402
 from careerops.models import VERDICTS  # noqa: E402
 from careerops.sources.registry import _client, probe  # noqa: E402
 
 
 def _threshold() -> float:
     return float(config.profile().get("review", {}).get("min_score_to_present", 4.0))
+
+
+def _is_connection(row) -> bool:
+    """True if this posting is from a company where Doran knows someone.
+
+    Matched on the resolved ATS board first and the normalized company name
+    second, because neither alone is reliable -- a company can be listed before
+    it has been resolved, and ATS company names drift from the common name.
+    """
+    if row is None:
+        return False
+    names, boards = config.connection_lookup()
+    ats = str(row["ats"] or "").lower()
+    slug = str(row["source_slug"] or "").lower()
+    if ats and slug and (ats, slug) in boards:
+        return True
+    return config.normalize_company(row["company"]) in names
 
 
 def _print_funnel(result: pipeline.DiscoveryResult) -> None:
@@ -127,6 +144,22 @@ def cmd_scan(args: argparse.Namespace) -> int:
             print("No targets. Run `python cli.py verify-sources` first.")
             return 1
 
+        # A connection company that never resolved has no board to sweep, so it
+        # would silently never appear. Warn rather than resolve inline -- probing
+        # mid-scan would slow every run for a one-off setup step.
+        if mode == pipeline.MODE_BROAD:
+            swept = {config.normalize_company(name) for _, _, name in targets}
+            unswept = [
+                entry.get("name")
+                for entry in (config.connections().get("companies") or [])
+                if config.normalize_company(entry.get("name")) not in swept
+            ]
+            if unswept:
+                print("Not in this sweep (no live board yet): "
+                      + ", ".join(str(n) for n in unswept))
+                print("  These are companies you know someone at. "
+                      "Run `python cli.py sync-connections` to add them.\n")
+
         result = pipeline.run_discovery(
             conn,
             mode=mode,
@@ -166,6 +199,9 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
     weights = {str(d["id"]): float(d["weight"]) for d in scoring["dimensions"]}
     cap = float(scoring.get("evidence", {}).get("cap_without_evidence", 3.0))
     total_weight = sum(weights.values())
+    connections_cfg = config.connections()
+    conn_bump = float(connections_cfg.get("bump", 1.0))
+    max_score = float(connections_cfg.get("max_score", 5.0))
 
     written = 0
     with store.connect() as conn:
@@ -233,6 +269,16 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
             if adjustment:
                 weighted = max(1.0, weighted + adjustment)
 
+            # Connection bump: a role at a company where Doran knows someone is
+            # worth more of his time than the same role cold, because he can get
+            # a referral instead of landing in the ATS pile. Kept OUT of
+            # `adjustment` so the DB can still tell a scope deduction apart from
+            # a relationship bonus, and hard-capped so it can never invent a
+            # score above the top of the scale.
+            posting_row = store.get_posting(conn, int(item["posting_id"]))
+            connection_bonus = conn_bump if _is_connection(posting_row) else 0.0
+            weighted = min(max_score, weighted + connection_bonus)
+
             store.record_evaluation(
                 conn,
                 int(item["posting_id"]),
@@ -240,6 +286,7 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
                 rubric_version=str(payload.get("rubric_version", scoring.get("version"))),
                 track=track,
                 scope_modifier=adjustment,
+                connection_bonus=connection_bonus,
                 dimension_scores=dims,
                 weighted_score=round(weighted, 3),
                 block_g_verdict=item.get("block_g_verdict", "PASS"),
@@ -249,8 +296,10 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
             )
             written += 1
             scope_note = f" scope={scope} {adjustment:+.2f}" if adjustment else ""
+            conn_note = (f" connection {connection_bonus:+.2f}"
+                         if connection_bonus else "")
             print(f"  posting {item['posting_id']}: {weighted:.2f}"
-                  f"{scope_note} [G={item.get('block_g_verdict', 'PASS')}]")
+                  f"{scope_note}{conn_note} [G={item.get('block_g_verdict', 'PASS')}]")
     print(f"\nRecorded {written} evaluation(s).")
     return 0
 
@@ -337,6 +386,104 @@ def cmd_verdict(args: argparse.Namespace) -> int:
         print(f"{row['title']} @ {row['company']} -> {args.verdict}")
         if args.reason:
             print(f"  reason: {args.reason}")
+
+        # Applying is the point of no return for the posting: companies take
+        # them down, and our own copy is overwritten on the next scan. Snapshot
+        # it now or lose it before the interview.
+        if args.verdict == "applied":
+            path = _archive_application(conn, row, applied_date=args.date,
+                                        reason=args.reason)
+            print(f"  archived: {path}")
+            print(f"  index   : {applications.rebuild_index()}")
+    return 0
+
+
+def _archive_application(conn, row, *, applied_date: str | None = None,
+                         reason: str | None = None):
+    """Write one applied posting to the permanent archive."""
+    latest = conn.execute(
+        """SELECT weighted_score, fit_summary, connection_bonus FROM evaluations
+           WHERE posting_id = ? ORDER BY id DESC LIMIT 1""",
+        (row["id"],),
+    ).fetchone()
+    return applications.write_application(
+        row,
+        applied_date=applied_date or datetime.now().strftime("%Y-%m-%d"),
+        reason=reason,
+        score=latest["weighted_score"] if latest else None,
+        connection_bonus=(latest["connection_bonus"] or 0.0) if latest else 0.0,
+        fit_summary=latest["fit_summary"] if latest else None,
+    )
+
+
+def cmd_applied(args: argparse.Namespace) -> int:
+    """List every role Doran applied to, with the path to its saved details."""
+    with store.connect() as conn:
+        rows = store.applied_postings(conn)
+        if not rows:
+            print("Nothing marked as applied yet.")
+            return 0
+
+        if args.backfill:
+            written = 0
+            for row in rows:
+                applied_date = str(row["applied_at"] or "")[:10] or "unknown"
+                path = _archive_application(conn, row, applied_date=applied_date,
+                                            reason=row["reason"])
+                sections = applications.extract_sections(row["description"])
+                print(f"  {path.name}\n      captured via: {sections['via']}")
+                written += 1
+            print(f"\nArchived {written} application(s).")
+            print(f"Index: {applications.rebuild_index()}")
+            return 0
+
+        print(f"{len(rows)} application(s), newest first:\n")
+        for row in rows:
+            applied_date = str(row["applied_at"] or "")[:10] or "date unknown"
+            score = row["weighted_score"] or 0
+            print(f"  {applied_date}  {score:.1f}  {row['title']} @ {row['company']}")
+            path = applications.archive_path(row, applied_date)
+            print(f"      details: {path if path.exists() else 'not archived yet - run `applied --backfill`'}")
+            if row["reason"]:
+                print(f"      note   : {row['reason']}")
+    return 0
+
+
+def cmd_sync_connections(args: argparse.Namespace) -> int:
+    """Make sure every company Doran has a connection at is actually scanned.
+
+    Without this the connection list is only a scoring rule -- a company that
+    was never resolved has no board to sweep, so it could get a +1 bump on
+    postings that never surface in the first place.
+    """
+    data = config.connections()
+    entries = data.get("companies", []) or []
+    if not entries:
+        print("No companies in config/connections.yml yet.")
+        return 0
+
+    resolved = already = failed = 0
+    for entry in entries:
+        name = entry.get("name", "")
+        if entry.get("ats") and entry.get("slug") and not args.force:
+            print(f"  ok      {name:28} {entry['ats']}/{entry['slug']}")
+            already += 1
+            continue
+        res = resolve.resolve(name, force=args.force)
+        if res.ok:
+            entry["ats"], entry["slug"] = res.ats, res.slug
+            resolve.save_resolution(res, watch=True)
+            print(f"  added   {name:28} {res.ats}/{res.slug}  ({res.job_count} jobs)")
+            resolved += 1
+        else:
+            print(f"  NO BOARD {name:27} {res.note or 'could not resolve'}")
+            failed += 1
+
+    config.save_connections(data)
+    print(f"\n{already} already set, {resolved} newly resolved, {failed} without a board.")
+    if failed:
+        print("Companies without a resolvable board still get the score bump if a "
+              "posting turns up via a job board - they just cannot be swept directly.")
     return 0
 
 
@@ -575,7 +722,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verdict", required=True,
                    help="interested | saved | not_interested | applied")
     p.add_argument("--reason")
+    p.add_argument("--date", help="YYYY-MM-DD he actually applied (default: today)")
     p.set_defaults(func=cmd_verdict)
+
+    p = sub.add_parser("applied", help="every role applied to + its saved details")
+    p.add_argument("--backfill", action="store_true",
+                   help="(re)write the archive file for every applied posting")
+    p.set_defaults(func=cmd_applied)
+
+    p = sub.add_parser("sync-connections",
+                       help="resolve connection companies and force them into the sweep")
+    p.add_argument("--force", action="store_true", help="re-resolve even known boards")
+    p.set_defaults(func=cmd_sync_connections)
 
     sub.add_parser("pending", help="postings shown but not yet ruled on").set_defaults(
         func=cmd_pending)

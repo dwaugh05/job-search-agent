@@ -38,11 +38,13 @@ are repairing state, debugging, or a workflow explicitly tells you to.
 | `python cli.py init` | Creates the SQLite database at `data/jobs.db`. Idempotent — every other command calls it implicitly where it matters. |
 | `python cli.py verify-sources` | Probes every company in `config/sources.yml`, marks each `live`/`dead`, resolves unknown slugs, writes the file back. Exits **non-zero if under 70% live**. |
 | `python cli.py resolve-company "DoorDash"` | Finds a company's live ATS board. Tries three routes in cost order: the local slug index, then ~45 blind slug probes, then reading the ATS link off the company's own careers page. Slugs are unguessable (DoorDash is `doordashusa`) — never hand-edit one. |
+| `python cli.py sync-connections` | Resolves every company in `config/connections.yml` — the places Doran knows someone — and forces each into the broad sweep with `watch: true`. Run it after adding names to that file. Companies with no standard ATS (Meta, Apple) will report "NO BOARD"; they still get the score bump, they just cannot be swept directly. |
 | `python cli.py refresh-tokens` | Rebuilds the local index of ~29,000 ATS board slugs that actually exist, from public Common Crawl datasets. Resolution consults it first, which is why it finds boards that guessing never could. Re-run every few months. |
 
 Flags: `verify-sources --force` re-resolves even known slugs.
 `resolve-company --save` caches into `sources.yml`, `--watch` also adds it to the
-broad sweep, `--force` ignores the cache.
+broad sweep, `--force` ignores the cache. `sync-connections --force` re-resolves
+connection companies whose board is already known.
 
 ### Discovery
 
@@ -73,14 +75,26 @@ apply_url, work_model, is_remote, source, board, id`.
 
 | Command | What it does |
 | --- | --- |
-| `python cli.py record-eval --file scores.json` | Writes A-G dimension scores back to SQLite. Applies the evidence cap, redistributes weight for null dimensions, applies scope/bonus modifiers, then stores the weighted score. |
+| `python cli.py record-eval --file scores.json` | Writes A-G dimension scores back to SQLite. Applies the evidence cap, redistributes weight for null dimensions, applies scope/bonus modifiers, adds the connection bump, clamps to 5.0, then stores the weighted score. |
 | `python cli.py report` | Renders the seven-field match list, the growth-marketing backup list, and the "Worth knowing about" tier. Adds an **Estimated Commute** line to hybrid and on-site postings, and archives the printed output verbatim to `data/reports/results-YYYY-MM-DD_HHMM.md`. |
 
 `record-eval` flags: `--run N` tags the evaluations to a run,
 `--track ai_enablement|growth_marketing` picks which list the scores belong to
 (default `ai_enablement`).
 
-Three behaviours in `record-eval` that are easy to trip over:
+Five behaviours in `record-eval` that are easy to trip over:
+
+- **Connection bump.** A posting from a company in `config/connections.yml` —
+  where Doran knows someone — gets a flat **+1.0**, stored separately in
+  `evaluations.connection_bonus` so it is never confused with a scope
+  adjustment. Matched on the resolved `(ats, slug)` first, then the normalized
+  company name and any `aliases`. The report prints a `Connection:` line so the
+  reason for the ranking is visible.
+- **Hard 5.0 ceiling.** The final score is clamped to `max_score` in
+  `connections.yml`. Before this existed a scope bonus could record 5.15 — the
+  calibration anchors already asserted 5.0 as the top, so nothing else changes.
+  Calibration is unaffected either way: it scores anchor documents through
+  `data/calibration-scores.json`, never through this command.
 
 - **Evidence cap.** A dimension in a gated block (A, B, C, F) scored above 3.0
   with no quoted string in `block_notes` is silently clamped to 3.0. This is the
@@ -126,15 +140,35 @@ python -c "import sys; sys.path.insert(0,'src'); from careerops import store; \
 
 | Command | What it does |
 | --- | --- |
-| `python cli.py verdict --posting <id> --verdict <v> --reason "..."` | Records Doran's ruling. Verdicts: `interested`, `saved`, `not_interested`, `applied`. Capture his reasoning verbatim — the reason is the valuable part. |
+| `python cli.py verdict --posting <id> --verdict <v> --reason "..."` | Records Doran's ruling. Verdicts: `interested`, `saved`, `not_interested`, `applied`. Capture his reasoning verbatim — the reason is the valuable part. `applied` also writes the archive file (below). `--date YYYY-MM-DD` for an application he made earlier. |
 | `python cli.py pending` | Lists postings shown but never ruled on. They are suppressed from scans, so this is the only place they surface. |
 | `python cli.py shortlist` | The interested/saved/applied pipeline with scores, links and notes. |
+| `python cli.py applied` | Every role he applied to, newest first, each with the path to its saved write-up. |
+| `python cli.py applied --backfill` | Rewrites the archive file for every applied posting. Use after adding a heading variant to `applications.py`. |
 | `python cli.py status` | Database summary: totals, run count, learned rules, breakdown by state. |
 | `python cli.py add-rule "<rule>" --dimension <n>` | Appends a durable learned rule to `rubric/learned-rules.md` and the DB. |
 | `python cli.py calibrate` | Builds `data/calibration-queue.md` with all five anchors for blind scoring. |
 | `python cli.py calibrate --check` | Verifies already-recorded anchor scores against their bands without re-queuing. |
 
 Never mark a posting `applied` unless Doran says he applied.
+
+### The application archive
+
+An `applied` verdict snapshots the posting to
+`data/applications/<date>-<company>-<title>.md` and refreshes `INDEX.md`. Each
+file holds the role overview, what the job asks him to do, and the requirements
+— **verbatim**, never paraphrased — because postings get taken down and he
+prepares for interviews weeks later from this file, not the dead link.
+
+Postings almost never say "Responsibilities": the wording variants live in
+`_OVERVIEW` / `_RESPONSIBILITIES` / `_REQUIREMENTS` in
+`src/careerops/applications.py`. Every file records how it was captured on a
+`Captured via:` line. If that line says `full-text fallback` or `no
+responsibilities heading found`, add the posting's wording to the right list and
+re-run `python cli.py applied --backfill`.
+
+The snapshot is taken at verdict time on purpose — `upsert_posting` overwrites
+`postings.description` on every rescan, so reading it back later is not safe.
 
 ---
 

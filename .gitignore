@@ -16,3 +16,4 @@ data/runs/
 Thumbs.db
 .DS_Store
 data/jobs.db
+data/jobs_backup.db

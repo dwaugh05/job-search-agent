@@ -154,6 +154,7 @@ _MIGRATIONS = [
     ("postings", "ai_fluency_requested", "INTEGER DEFAULT 0"),
     ("evaluations", "track", "TEXT DEFAULT 'ai_enablement'"),
     ("evaluations", "scope_modifier", "REAL DEFAULT 0"),
+    ("evaluations", "connection_bonus", "REAL DEFAULT 0"),
 ]
 
 
@@ -374,18 +375,19 @@ def record_evaluation(
     block_notes: dict[str, str] | None = None,
     track: str = "ai_enablement",
     scope_modifier: float = 0.0,
+    connection_bonus: float = 0.0,
 ) -> int:
     cur = conn.execute(
         """INSERT INTO evaluations (
                posting_id, run_id, rubric_version, dimension_scores, block_notes,
                weighted_score, block_g_verdict, block_g_flags, fit_summary,
-               evaluated_at, track, scope_modifier)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+               evaluated_at, track, scope_modifier, connection_bonus)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             posting_id, run_id, rubric_version, json.dumps(dimension_scores),
             json.dumps(block_notes or {}), weighted_score, block_g_verdict,
             json.dumps(block_g_flags or []), fit_summary, now_iso(),
-            track, scope_modifier,
+            track, scope_modifier, connection_bonus,
         ),
     )
     # Only advance the state forward. Re-running record-eval after a report or a
@@ -433,7 +435,7 @@ def presentable(conn: sqlite3.Connection, threshold: float,
     """
     sql = """
         SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict,
-               e.block_g_flags, e.track
+               e.block_g_flags, e.track, e.connection_bonus
         FROM postings p
         JOIN evaluations e ON e.id = (
             SELECT id FROM evaluations
@@ -545,6 +547,28 @@ def shortlist(conn: sqlite3.Connection) -> list[sqlite3.Row]:
            )
            WHERE p.state IN ('interested', 'saved', 'applied')
            ORDER BY e.weighted_score DESC""",
+    ).fetchall()
+
+
+def applied_postings(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Everything Doran applied to, newest application first.
+
+    Joined to the verdict row rather than the posting, because the date he
+    applied is the date he said so -- `postings` has no such field.
+    """
+    return conn.execute(
+        """SELECT p.*, e.weighted_score, e.fit_summary, e.connection_bonus,
+                  v.reason, v.created_at AS applied_at
+           FROM postings p
+           LEFT JOIN evaluations e ON e.id = (
+               SELECT id FROM evaluations WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+           )
+           LEFT JOIN verdicts v ON v.id = (
+               SELECT id FROM verdicts WHERE posting_id = p.id AND verdict = 'applied'
+               ORDER BY id DESC LIMIT 1
+           )
+           WHERE p.state = 'applied'
+           ORDER BY v.created_at DESC""",
     ).fetchall()
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,77 @@ def save_sources(data: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         handle.writelines(header_lines)
         yaml.safe_dump(data, handle, sort_keys=False, allow_unicode=True, width=100)
+
+
+def connections() -> dict[str, Any]:
+    """Companies where Doran has a personal connection.
+
+    Not cached, for the same reason sources() is not: sync-connections rewrites
+    this file at runtime to cache resolved ATS slugs.
+    """
+    path = CONFIG_DIR / "connections.yml"
+    if not path.exists():
+        return {"bump": 1.0, "max_score": 5.0, "companies": []}
+    return _load(path)
+
+
+def save_connections(data: dict[str, Any]) -> None:
+    """Write connections.yml back, preserving the leading comment block."""
+    path = CONFIG_DIR / "connections.yml"
+    header_lines: list[str] = []
+    if path.exists():
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("#") or not line.strip():
+                    header_lines.append(line)
+                else:
+                    break
+    with path.open("w", encoding="utf-8") as handle:
+        handle.writelines(header_lines)
+        yaml.safe_dump(data, handle, sort_keys=False, allow_unicode=True, width=100)
+
+
+# Legal suffixes and punctuation that differ between how Doran names a company
+# and how its ATS does ("Meta" vs "Meta Platforms, Inc.").
+_COMPANY_NOISE = re.compile(r"[^a-z0-9]+")
+_COMPANY_SUFFIXES = ("inc", "incorporated", "llc", "ltd", "limited", "corp",
+                     "corporation", "co", "company", "plc", "gmbh", "sa", "ag")
+
+
+def normalize_company(name: str | None) -> str:
+    """Collapse a company name to a comparable key."""
+    if not name:
+        return ""
+    key = _COMPANY_NOISE.sub(" ", str(name).lower()).strip()
+    parts = key.split()
+    while parts and parts[-1] in _COMPANY_SUFFIXES:
+        parts.pop()
+    return "".join(parts)
+
+
+def connection_lookup() -> tuple[set[str], set[tuple[str, str]]]:
+    """Return (normalized names incl. aliases, (ats, slug) pairs).
+
+    Two keys because neither alone is reliable: a company can be matched by
+    name before it has been resolved, and by board once it has -- and ATS
+    company names drift from the common name often enough to need both.
+    """
+    names: set[str] = set()
+    boards: set[tuple[str, str]] = set()
+    for entry in connections().get("companies", []) or []:
+        if not isinstance(entry, dict):
+            entry = {"name": entry}
+        key = normalize_company(entry.get("name"))
+        if key:
+            names.add(key)
+        for alias in entry.get("aliases") or []:
+            alias_key = normalize_company(alias)
+            if alias_key:
+                names.add(alias_key)
+        ats, slug = entry.get("ats"), entry.get("slug")
+        if ats and slug:
+            boards.add((str(ats).lower(), str(slug).lower()))
+    return names, boards
 
 
 def ensure_dirs() -> None:

@@ -6,7 +6,7 @@ strong matches for **manual** review.
 
 ## Read this first
 
-**Before running any command in this repo, read `.claude/README.md`.** It is the
+**Before running any command in this repo, read `.claude/README.md` (or the equivalent documentation for this project).** It is the
 full command reference — every slash command and every `cli.py` subcommand, with
 flags, the canonical run sequences, and the gotchas that cost a run when missed.
 The command list further down this file is a summary, not the reference.
@@ -68,7 +68,7 @@ remove jargon, give him the next action.
    matches. Doran's application time is the scarce resource. Never pad a report.
 
 4. **NO CREDENTIAL STORAGE.** Browser work uses Doran's own logged-in Chrome via
-   the `claude-in-chrome` MCP. Never store, request, or hardcode credentials.
+   the MCP browser tool. Never store, request, or hardcode credentials.
 
 ## Architecture invariant
 
@@ -82,7 +82,7 @@ produce different scores for the same posting, that is a bug.
 
 - **Python** does deterministic work only: fetch, normalize, dedupe, apply
   mechanical gates, persist, render. It never judges fit.
-- **Claude (in-session)** does the semantic A-G evaluation on the small prefiltered
+- **Agent (in-session)** does the semantic A-G evaluation on the small prefiltered
   queue, then writes scores back to SQLite via `cli.py record-eval`.
 - **SQLite (`data/jobs.db`) is the source of truth**, not the conversation.
 
@@ -90,8 +90,7 @@ produce different scores for the same posting, that is a bug.
 
 **He will not read a long message. Assume he reads the first few lines and the
 bold bits.** Do not build later messages on the assumption that he absorbed an
-earlier one — he told me directly, 2026-08-14: *"Don't recall that exactly When
-you're expecting me to read everything, which I just don't do."*
+earlier one.
 
 Rules:
 
@@ -101,11 +100,10 @@ Rules:
    hold the rest. A list of four questions gets zero answered.
 3. **Never refer back to a previous message by name** ("the fallback I mentioned",
    "as discussed above"). Re-explain in one sentence, every time, from scratch.
-4. **No jargon without a plain-English gloss on the same line.** "Per-run cap",
-   "resolution fallback" and "scope modifier" all failed this test.
+4. **No jargon without a plain-English gloss on the same line.**
 5. **Say what it costs him** — his time, his tokens, his money — whenever
-   proposing work. He is actively conscious of Anthropic token spend and prefers
-   a programmatic (Python) solution over a Claude-in-the-loop one wherever both
+   proposing work. He is actively conscious of API token spend and prefers
+   a programmatic (Python) solution over an Agent-in-the-loop one wherever both
    would work.
 6. Long output is fine when he asked for a *document* (a report, a rubric, a
    file). It is not fine in conversation.
@@ -122,7 +120,7 @@ Summary only — the full reference with flags is `.claude/README.md`.
 ```
 python cli.py verify-sources                 # probe every ATS slug, mark live/dead
 python cli.py scan [--companies A,B,C]       # sweep live sources AND apply the gates
-python cli.py queue                          # re-render the eval queue for Claude
+python cli.py queue                          # re-render the eval queue for Agent
 python cli.py record-eval --file scores.json # write A-G scores back
 python cli.py report                         # strict 7-field output (marks as presented)
 python cli.py verdict --posting <id> --verdict not_interested --reason "..."

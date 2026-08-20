@@ -1273,6 +1273,66 @@ companies:
   slug: neo4j
   status: live
   watch: true
+- name: Merck
+  ats: workday
+  slug: msd:wd5:SearchJobs
+  status: live
+  watch: true
+- name: Amgen
+  ats: workday
+  slug: amgen:wd1:careers
+  status: live
+  watch: true
+- name: Denali Therapeutics
+  ats: workday
+  slug: dnli:wd1:Development
+  status: live
+  watch: true
+- name: Illumina
+  ats: workday
+  slug: illumina:wd1:illumina-careers
+  status: live
+  watch: true
+- name: LastPass
+  ats: greenhouse
+  slug: lastpass
+  status: live
+  watch: true
+- name: Tenable
+  ats: greenhouse
+  slug: tenableinc
+  status: live
+  watch: true
+- name: SimpliSafe
+  ats: greenhouse
+  slug: simplisafe
+  status: live
+  watch: true
+- name: Gartner
+  ats: workday
+  slug: gartner:wd5:ext
+  status: live
+  watch: true
+- name: Madison Logic
+  ats: greenhouse
+  slug: madisonlogicinc
+  status: live
+  watch: true
+- name: Symmetry Systems
+  ats: greenhouse
+  slug: symmetry
+  status: live
+  watch: true
+- name: Cribl
+  ats: greenhouse
+  slug: cribl
+  status: live
+  watch: true
+- name: Employ
+  ats: lever
+  slug: employ
+  status: live
+  watch: true
 browser_boards:
 - key: builtin_sf
   label: Built In SF

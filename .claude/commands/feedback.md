@@ -54,6 +54,35 @@ Capture his reasoning **verbatim** in `--reason`. The reason is the valuable par
 Note that recording a verdict also moves the posting's state, which is what puts
 it on `/shortlist`.
 
+### When the verdict is `applied`
+
+Saying "applied" also archives the posting. This happens automatically — a
+markdown file lands in `data/applications/` holding the role's responsibilities
+and requirements **verbatim**, snapshotted that day. It exists because postings
+get taken down and he cannot prep for an interview from a dead link.
+
+Two things to do:
+
+1. **Tell him the file path** the command printed. That is the thing he comes
+   back to weeks later, so it needs to be visible, not buried.
+2. **Check the `Captured via:` line** in the file. If it says `full-text
+   fallback` or `no responsibilities heading found`, the posting used wording
+   the extractor does not know. Add the heading to the relevant list in
+   `src/careerops/applications.py` and re-run
+   `python cli.py applied --backfill`. That is a one-line addition.
+
+If he applied on an earlier date, pass it — the archive is dated from this flag:
+
+```
+python cli.py verdict --posting <id> --verdict applied --reason "<his words>" --date 2026-08-12
+```
+
+To show him everything he has applied to and where each write-up lives:
+
+```
+python cli.py applied
+```
+
 ## 3. Result quality -> `add-rule`
 
 This needs no verdict at all. Take what Doran said, map it to a dimension using
@@ -93,4 +122,5 @@ the rubric drifting.
 - Never ask for a numeric score. Never write a rule Doran has not seen.
 - Record his reasoning in his own words, not a paraphrase.
 - Never mark a posting as applied unless Doran says he applied.
+- After an `applied` verdict, always tell him where the write-up was saved.
 - Scoring feedback never requires an application verdict.

@@ -1,0 +1,133 @@
+# Companies where Doran has a personal connection - a friend, a former
+# colleague, or a LinkedIn relationship warm enough to ask for a referral.
+#
+# Two things happen to every company listed here:
+#   1. It is force-included in the broad sweep. `python cli.py sync-connections`
+#      resolves its ATS board and marks it watched in sources.yml, so a
+#      connection company can never quietly fall out of the scan.
+#   2. Every posting from it gets a flat score bump (below), hard-capped at 5.0,
+#      and is flagged in the report so the reason for the ranking is visible.
+#
+# Only `name` is required. `ats` and `slug` are filled in by sync-connections.
+# `aliases` matters when the ATS company name differs from the common name
+# (Meta posts as "Facebook" on some boards). `contact` is free text for Doran's
+# own reference and is never used by the code.
+
+bump: 1.0
+max_score: 5.0
+companies:
+- name: Meta
+  aliases:
+  - Facebook
+  - Meta Platforms
+  contact: ''
+- name: Apple
+  contact: ''
+- name: Gilead Sciences
+  aliases:
+  - Gilead
+  contact: ''
+  ats: workday
+  slug: gilead:wd1:gileadcareers
+- name: Merck
+  contact: ''
+  ats: workday
+  slug: msd:wd5:SearchJobs
+- name: Genentech
+  aliases:
+  - Roche
+  - Genetech (Roche)
+  contact: ''
+  ats: workday
+  slug: roche:wd3:roche-ext
+- name: Amgen
+  contact: ''
+  ats: workday
+  slug: amgen:wd1:careers
+- name: Denali Therapeutics
+  contact: ''
+  ats: workday
+  slug: dnli:wd1:Development
+- name: Infoblox
+  contact: ''
+- name: Verkada
+  contact: ''
+  ats: greenhouse
+  slug: verkada
+- name: Sony Interactive Entertainment
+  aliases:
+  - Playstation
+  - Sony Interactive
+  contact: ''
+  ats: greenhouse
+  slug: sonyinteractiveentertainmentglobal
+- name: Datadog
+  contact: ''
+  ats: greenhouse
+  slug: datadog
+- name: Wells Fargo
+  contact: ''
+- name: Airbnb
+  contact: ''
+  ats: greenhouse
+  slug: airbnb
+- name: Illumina
+  contact: ''
+  ats: workday
+  slug: illumina:wd1:illumina-careers
+- name: LastPass
+  contact: ''
+  ats: greenhouse
+  slug: lastpass
+- name: PG&E
+  contact: ''
+- name: JPMorgan Chase
+  aliases:
+  - JP Morgan
+  - Chase
+  - JP Morgan (Chase)
+  contact: ''
+- name: Broadcom (VMware)
+  aliases:
+  - VMware
+  contact: ''
+  ats: workday
+  slug: broadcom:wd1:External_Career
+- name: Tenable
+  contact: ''
+  ats: greenhouse
+  slug: tenableinc
+- name: SimpliSafe
+  contact: ''
+  ats: greenhouse
+  slug: simplisafe
+- name: LegalZoom
+  contact: ''
+- name: Gartner
+  contact: ''
+  ats: workday
+  slug: gartner:wd5:ext
+- name: Madison Logic
+  contact: ''
+  ats: greenhouse
+  slug: madisonlogicinc
+- name: TransUnion
+  contact: ''
+- name: Symmetry Systems
+  contact: ''
+  ats: greenhouse
+  slug: symmetry
+- name: Cribl
+  contact: ''
+  ats: greenhouse
+  slug: cribl
+- name: Employ
+  contact: ''
+  ats: lever
+  slug: employ
+- name: Coldwell Banker Realty
+  contact: ''
+- name: The Walt Disney Company
+  aliases:
+  - Disney
+  contact: ''

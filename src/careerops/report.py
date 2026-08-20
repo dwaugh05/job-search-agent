@@ -68,6 +68,23 @@ def commute_field(row: sqlite3.Row) -> str | None:
     return f"Estimated Commute: {result.minutes} min door-to-door from San Mateo 94403"
 
 
+def _connection_field(row: sqlite3.Row) -> str | None:
+    """Say out loud that a score was raised by a personal connection.
+
+    The bump is worth nothing if it is invisible: Doran needs to know a role
+    ranked where it did partly because he knows someone there, otherwise the
+    ranking looks arbitrary and he stops trusting it.
+    """
+    try:
+        bonus = float(row["connection_bonus"] or 0)
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+    if not bonus:
+        return None
+    return (f"Connection: you know someone at {row['company']} - "
+            f"score includes a +{bonus:.1f} bump for the warm intro")
+
+
 def render_matches(rows: list[sqlite3.Row]) -> str:
     """The match list Doran reads.
 
@@ -95,6 +112,9 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
             f"Posted: {_posted_field(row)}",
             f"Fit Summary: {(row['fit_summary'] or '').strip()}",
         ]
+        connection_line = _connection_field(row)
+        if connection_line:
+            block.append(connection_line)
         if row["block_g_verdict"] == "FLAG":
             flags = _flags(row)
             block.append(
