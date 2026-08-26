@@ -117,6 +117,12 @@ def cmd_resolve_company(args: argparse.Namespace) -> int:
         if args.save:
             resolve.save_resolution(res, watch=args.watch)
             print("  cached into config/sources.yml")
+        # A scan that gives up on a company tells Doran to run this command by
+        # hand. Without clearing the row, it would keep telling him that after he
+        # already did it -- a note that lies is worse than no note.
+        store.init_db()
+        with store.connect() as conn:
+            store.clear_resolve_backlog(conn, [args.company, res.company])
     else:
         print(f"  {res.note}")
         print(f"  probes issued: {res.candidates_tried}")
@@ -366,9 +372,16 @@ def cmd_report(args: argparse.Namespace) -> int:
         run = store.latest_run(conn)
         run_id = args.run or (run["id"] if run else 0)
 
-        stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
-        archive = report.write_presented_report(presented, run_id=run_id, stamp=stamp)
-        print(f"\n[saved verbatim: {archive}]")
+        # A dry run must not leave an archive behind. data/reports/ is what Doran
+        # re-reads weeks later, and a preview file is indistinguishable from a
+        # real one once it is sitting in that folder -- it would look like he was
+        # shown roles he never saw.
+        if args.no_mark:
+            print("\n[dry run: nothing marked as presented, no archive written]")
+        else:
+            stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+            archive = report.write_presented_report(presented, run_id=run_id, stamp=stamp)
+            print(f"\n[saved verbatim: {archive}]")
 
         if matches or near:
             path = report.write_run_report(

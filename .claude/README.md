@@ -62,7 +62,7 @@ connection companies whose board is already known.
 | `--companies "A,B,C"` | Switches to targeted mode (the `/scan-companies` path). |
 | `--fresh` | Targeted mode only: re-applies the freshness window, which targeted mode drops by default. |
 | `--all-open` | Broad mode only: ignores the freshness window entirely. |
-| `--days N` | Overrides the window. Default comes from `hard_gates.freshness_days` in `config/profile.yml` (currently **30**). |
+| `--days N` | Overrides the window. Default comes from `hard_gates.freshness_days` in `config/profile.yml` (currently **60**). |
 | `--watch` | Targeted mode: also add these companies to future broad sweeps. |
 | `--skip-liveness` | Skips the apply-URL re-check. Debugging only — liveness is a hard rule. |
 | `--no-boards` | Broad mode: skip role-first board discovery, sweep companies only. |
@@ -71,12 +71,38 @@ connection companies whose board is already known.
 `company, title, url, description`. Optional: `location, salary, published_at,
 apply_url, work_model, is_remote, source, board, id`.
 
+Four things `scan` does that the funnel counts name but do not explain
+(all added 2026-08-25):
+
+- **The resolve backlog is real now.** Turning an unknown employer into a live
+  ATS costs ~45 probes, so a run only does 60 of them. Everything past that used
+  to be dropped while the log claimed it would be "picked up next run" — nothing
+  remembered it. Over-cap employers are now saved to a `resolve_backlog` table,
+  drained oldest-first at the start of the next run, **and** read from the
+  board's own page in the same run so a real match is not lost to a budget
+  ceiling. A company that fails to resolve goes to the back of the queue rather
+  than to the front forever.
+- **`duplicate_reposts_collapsed`** counts per-country clones. Reseller boards
+  list one role once per country, identical but for the country name, and each
+  copy used to cost a full Claude read — 42 of 140 queue slots in run 14. The
+  collapse runs *after* the gates, so the US copy survives and the Dubai copy is
+  the one dropped.
+- **A dead ATS host is now stated.** If a provider times out repeatedly it is
+  abandoned for the rest of the run; previously every company on it reported
+  "feed returned nothing", which reads identically to an employer with no
+  openings. The run now prints a WARNING naming the host.
+- **LinkedIn throttling is no longer read as "no more results".** LinkedIn
+  answers 200 with an empty body when you go too fast, which the old paging
+  treated as the end of the result set — so queries ended early and silently.
+  Pages are retried with backoff, and the whole LinkedIn channel gives up after
+  repeated throttling rather than pushing on toward a block.
+
 ### Scoring and reporting
 
 | Command | What it does |
 | --- | --- |
 | `python cli.py record-eval --file scores.json` | Writes A-G dimension scores back to SQLite. Applies the evidence cap, redistributes weight for null dimensions, applies scope/bonus modifiers, adds the connection bump, clamps to 5.0, then stores the weighted score. |
-| `python cli.py report` | Renders the seven-field match list, the growth-marketing backup list, and the "Worth knowing about" tier. Adds an **Estimated Commute** line to hybrid and on-site postings, and archives the printed output verbatim to `data/reports/results-YYYY-MM-DD_HHMM.md`. |
+| `python cli.py report` | Renders the eight-field match list (Company first), the growth-marketing backup list, and the "Worth knowing about" tier. Adds an **Estimated Commute** line to hybrid and on-site postings, and archives the printed output verbatim to `data/reports/results-YYYY-MM-DD_HHMM.md`. |
 
 `record-eval` flags: `--run N` tags the evaluations to a run,
 `--track ai_enablement|growth_marketing` picks which list the scores belong to

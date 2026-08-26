@@ -101,7 +101,16 @@ def _slice_json_object(text: str, anchor: int) -> dict | None:
     return None
 
 
-def search(client: httpx.Client, url: str, max_pages: int = 3) -> list[Lead]:
+# Raised 3 -> 8 on 2026-08-26. Measured against the four postings Doran
+# forwarded from his Built In digest: the "AI enablement" search runs 190
+# results over 8 pages and then dries up on its own, and two of his four sat on
+# pages 5 and 6 -- past the old cutoff, so reading three pages found half of
+# what he had already spotted by hand. Paging stops as soon as a page returns
+# nothing, so a narrow search still costs only the pages it actually has.
+MAX_PAGES = 8
+
+
+def search(client: httpx.Client, url: str, max_pages: int = MAX_PAGES) -> list[Lead]:
     """Read one Built In listing URL and return leads."""
     leads: list[Lead] = []
     seen: set[str] = set()
@@ -181,16 +190,38 @@ def posting_from_lead(client: httpx.Client, lead: Lead) -> Posting | None:
     if smin is None and smax is None and salary_raw:
         smin, smax = parse_salary(salary_raw)
 
-    location_raw = ""
-    loc = data.get("jobLocation")
-    if isinstance(loc, dict):
-        address = loc.get("address") or {}
-        if isinstance(address, dict):
-            location_raw = ", ".join(
-                str(address.get(k)) for k in
-                ("addressLocality", "addressRegion", "addressCountry")
-                if address.get(k)
-            )
+    # schema.org allows jobLocation to be a single Place OR a list of them, and
+    # Built In uses both. Reading only the dict form left multi-office postings
+    # with an empty location, which the geography gate then rejected as "unknown
+    # location" -- a true rejection reached by a false route. ClearView's "AI
+    # Enablement Manager" is filed at Newton, Massachusetts and should be turned
+    # down for being in Massachusetts, not for having no address at all.
+    places = data.get("jobLocation")
+    if isinstance(places, dict):
+        places = [places]
+    parts = []
+    for place in places or []:
+        if not isinstance(place, dict):
+            continue
+        address = place.get("address") or {}
+        if not isinstance(address, dict):
+            continue
+        # A country with no city is not a location, it is an eligibility note --
+        # a remote role open across the US and Canada lists {"addressCountry":
+        # "USA"} and nothing else. Keeping those would produce "CAN / USA",
+        # which reads as an unknown city and rejects a perfectly good remote job.
+        if not address.get("addressLocality"):
+            continue
+        one = ", ".join(
+            str(address.get(k)) for k in
+            ("addressLocality", "addressRegion", "addressCountry")
+            if address.get(k)
+        )
+        if one and one not in parts:
+            parts.append(one)
+    # Every office, so a posting listing Boston, New York AND San Francisco is
+    # judged on the San Francisco one rather than on whichever came first.
+    location_raw = " / ".join(parts)
     # Built In sets jobLocationType=TELECOMMUTE on postings that also carry a
     # physical address -- observed on Santa Ana, Warren and Louisville roles that
     # are plainly not fully remote. This is the same trap Ashby's `isRemote`

@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from . import config
-from .fingerprint import description_hash, fingerprint as compute_fingerprint
+from .fingerprint import (
+    description_hash,
+    fingerprint as compute_fingerprint,
+    normalize_company,
+    normalize_title,
+)
 from .models import (
     STATE_EVALUATED,
     STATE_NEW,
@@ -121,6 +126,27 @@ CREATE TABLE IF NOT EXISTS verdicts (
     created_at TEXT NOT NULL
 );
 
+-- Companies a board search surfaced but that we ran out of resolve budget for.
+-- Before this table existed the scan printed "they will be picked up next run"
+-- and then forgot them: a company skipped here was only ever retried if it
+-- happened to show up in a future search by luck. Now the next run drains this
+-- first, so the budget carries over instead of resetting.
+--
+-- `company` holds the NORMALIZED name, not what the board printed. LinkedIn,
+-- Built In and Hacker News each spell an employer differently -- "Databricks",
+-- "databricks", "Databricks Inc." -- and keyed raw those are three rows, three
+-- of the sixty cap slots, three resolution attempts at ~45 requests each in the
+-- same run, and three separate attempt counters. `display` keeps a real name to
+-- hand to the resolver and to print.
+CREATE TABLE IF NOT EXISTS resolve_backlog (
+    company     TEXT PRIMARY KEY,
+    display     TEXT,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    times_seen  INTEGER DEFAULT 1,
+    attempts    INTEGER DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS learned_rules (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     rule_text  TEXT NOT NULL,
@@ -155,6 +181,7 @@ _MIGRATIONS = [
     ("evaluations", "track", "TEXT DEFAULT 'ai_enablement'"),
     ("evaluations", "scope_modifier", "REAL DEFAULT 0"),
     ("evaluations", "connection_bonus", "REAL DEFAULT 0"),
+    ("resolve_backlog", "display", "TEXT"),
 ]
 
 
@@ -167,6 +194,118 @@ def init_db(db_path: Path | None = None) -> None:
             }
             if column not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
+# ------------------------------------------------------- board resolve backlog
+
+
+def backlog_key(company: str | None) -> str:
+    """The identity a company is tracked under. See the table comment above."""
+    return normalize_company(company)
+
+
+def queue_resolve_backlog(conn: sqlite3.Connection, companies: list[str]) -> None:
+    """Remember employers we found but had no resolve budget left for."""
+    stamp = now_iso()
+    for company in companies:
+        name = (company or "").strip()
+        key = backlog_key(name)
+        if not name or not key:
+            continue
+        conn.execute(
+            """INSERT INTO resolve_backlog (company, display, first_seen, last_seen)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(company) DO UPDATE SET
+                   last_seen = excluded.last_seen,
+                   times_seen = times_seen + 1""",
+            (key, name, stamp, stamp),
+        )
+
+
+# Some companies have no ATS this system can find -- no standard board, or a
+# careers page that only a browser can read. Retrying those forever costs ~45
+# probes each, every run, and steals cap slots from companies that would
+# actually resolve. After this many failures a company is parked rather than
+# deleted, so `cli.py resolve-company` by hand still knows it was seen.
+BACKLOG_MAX_ATTEMPTS = 3
+
+
+def take_resolve_backlog(conn: sqlite3.Connection, limit: int) -> list[str]:
+    """Oldest-first, so a company cannot be starved run after run.
+
+    Ordering by attempts and then first_seen means anything untried goes ahead
+    of anything already tried, and nothing sits at the back forever. Companies
+    past BACKLOG_MAX_ATTEMPTS are skipped entirely -- see the constant above.
+    """
+    if limit <= 0:
+        return []
+    rows = conn.execute(
+        """SELECT company, display FROM resolve_backlog
+           WHERE attempts < ?
+           ORDER BY attempts ASC, first_seen ASC, times_seen DESC
+           LIMIT ?""",
+        (BACKLOG_MAX_ATTEMPTS, limit),
+    ).fetchall()
+    # The resolver needs a real name, not the normalized key.
+    return [row["display"] or row["company"] for row in rows]
+
+
+def clear_resolve_backlog(conn: sqlite3.Connection, companies: list[str]) -> None:
+    """Drop companies we have now resolved -- they live in sources.yml instead."""
+    for company in companies:
+        conn.execute("DELETE FROM resolve_backlog WHERE company = ?",
+                     (backlog_key(company),))
+
+
+def bump_resolve_attempts(conn: sqlite3.Connection, companies: list[str]) -> None:
+    """Record a failed resolution attempt.
+
+    Inserts as well as updates on purpose. A company found on a board this run
+    and tried for the first time is not in the table yet, and before this it was
+    simply forgotten -- so the next run re-probed it at ~45 requests, and the run
+    after that, forever, while it also ate a slot under the resolve cap. Now the
+    failure is remembered and counts toward BACKLOG_MAX_ATTEMPTS.
+    """
+    stamp = now_iso()
+    for company in companies:
+        name = (company or "").strip()
+        if not name:
+            continue
+        key = backlog_key(name)
+        if not key:
+            continue
+        conn.execute(
+            """INSERT INTO resolve_backlog
+                   (company, display, first_seen, last_seen, attempts)
+               VALUES (?, ?, ?, ?, 1)
+               ON CONFLICT(company) DO UPDATE SET
+                   attempts = attempts + 1,
+                   last_seen = excluded.last_seen""",
+            (key, name, stamp, stamp),
+        )
+
+
+def resolve_backlog_size(conn: sqlite3.Connection) -> int:
+    """How many companies are still worth retrying."""
+    return int(conn.execute(
+        "SELECT COUNT(*) AS n FROM resolve_backlog WHERE attempts < ?",
+        (BACKLOG_MAX_ATTEMPTS,),
+    ).fetchone()["n"])
+
+
+def resolve_backlog_exhausted(conn: sqlite3.Connection) -> list[str]:
+    """Companies we have given up resolving automatically.
+
+    Kept rather than deleted: these are real employers with real postings that
+    this system cannot find a board for, and `cli.py resolve-company "<name>"`
+    tries much harder than a bulk run can afford to.
+    """
+    rows = conn.execute(
+        """SELECT company, display FROM resolve_backlog
+           WHERE attempts >= ? ORDER BY company""",
+        (BACKLOG_MAX_ATTEMPTS,),
+    ).fetchall()
+    return [row["display"] or row["company"] for row in rows]
 
 
 # ------------------------------------------------------------------------ runs
@@ -312,6 +451,39 @@ def suppressed_fingerprints(conn: sqlite3.Connection) -> set[str]:
         tuple(SUPPRESSED_STATES),
     ).fetchall()
     return {row["fingerprint"] for row in rows}
+
+
+# Sources where the posting body came off a board page rather than the employer's
+# own feed. The two texts for one job differ enough that they fingerprint apart.
+BOARD_SOURCES = ("linkedin", "builtin", "hn", "boards")
+
+
+def suppressed_board_roles(conn: sqlite3.Connection) -> set[tuple[str, str]]:
+    """Roles already shown whose stored copy came from a board, by name.
+
+    The fingerprint covers a repost of the same text. It cannot cover the same
+    job arriving twice by two different routes: a company over the resolve cap
+    gets its posting read off LinkedIn this run and swept from its own ATS the
+    next, and those two bodies are written differently enough to hash apart. The
+    result is Doran shown the same role twice, which is the one thing the
+    suppression rule exists to prevent.
+
+    Matched on normalized company and title rather than on text, because the
+    text is exactly what differs. Restricted to roles whose stored copy is
+    board-sourced so this cannot quietly suppress a genuinely separate opening
+    that happens to share a title.
+    """
+    placeholders = ",".join("?" for _ in SUPPRESSED_STATES)
+    boards = ",".join("?" for _ in BOARD_SOURCES)
+    rows = conn.execute(
+        f"""SELECT DISTINCT company, title FROM postings
+            WHERE state IN ({placeholders}) AND ats IN ({boards})""",
+        tuple(SUPPRESSED_STATES) + BOARD_SOURCES,
+    ).fetchall()
+    return {
+        (normalize_company(row["company"]), normalize_title(row["title"]))
+        for row in rows
+    }
 
 
 def already_evaluated(conn: sqlite3.Connection, rubric_version: str) -> set[str]:

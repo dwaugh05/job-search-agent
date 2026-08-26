@@ -318,6 +318,57 @@ check("builtin survives braces inside the HTML description",
 check("builtin returns None when there is no JobPosting",
       _builtin._slice_json_object('{"@type":"Organization","name":"x"}', 5), None)
 
+# jobLocation is a single Place OR a list of them, and Built In uses both. Read
+# as a dict only, a three-office posting came back with no location at all and
+# was rejected as "unknown location" -- ClearView's "AI Enablement Manager" is
+# filed at Newton MA, New York NY and San Francisco CA, and the San Francisco
+# office is the whole reason it is worth showing Doran.
+
+
+def _place(city=None, region=None, country="USA"):
+    address = {"addressCountry": country}
+    if city:
+        address["addressLocality"] = city
+    if region:
+        address["addressRegion"] = region
+    return {"@type": "Place", "address": address}
+
+
+def _location_of(job):
+    """Mirror of the location assembly in builtin.posting_from_lead."""
+    places = job.get("jobLocation")
+    if isinstance(places, dict):
+        places = [places]
+    parts = []
+    for place in places or []:
+        address = (place or {}).get("address") or {}
+        if not address.get("addressLocality"):
+            continue
+        one = ", ".join(
+            str(address.get(k)) for k in
+            ("addressLocality", "addressRegion", "addressCountry") if address.get(k)
+        )
+        if one and one not in parts:
+            parts.append(one)
+    return " / ".join(parts)
+
+
+check("a single office still parses",
+      _location_of({"jobLocation": _place("Foster City", "California")}),
+      "Foster City, California, USA")
+check("every office in a list is kept, so the Bay Area one is visible",
+      "San Francisco" in _location_of({"jobLocation": [
+          _place("Newton", "Massachusetts"),
+          _place("New York", "New York"),
+          _place("San Francisco", "California")]}),
+      True)
+# A country with no city is an eligibility note, not a place. Keeping it turned
+# a US/Canada remote role into the unparseable location "CAN / USA".
+check("country-only entries are not treated as locations",
+      _location_of({"jobLocation": [_place(country="CAN"), _place(country="USA")]}),
+      "")
+check("a missing jobLocation is still empty", _location_of({}), "")
+
 # ---------------------------------------------------------------------------
 # Hacker News "Who is hiring" parsing. These posts are prose with no title
 # field, so a regression here silently drops the highest-signal AI/startup

@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from careerops import prefilter, store  # noqa: E402
+from careerops import config, prefilter, store  # noqa: E402
 from careerops.fingerprint import fingerprint  # noqa: E402
 from careerops.models import (  # noqa: E402
     STATE_NOT_INTERESTED, STATE_PRESENTED, Posting,
@@ -73,19 +73,34 @@ def fp_of(posting: Posting) -> str:
 
 # ------------------------------------------------------------------ freshness
 
-print("\nfreshness (Doran's 14-day window)")
+# The window is read from config/profile.yml, so this reads it too rather than
+# hard-coding a number that goes stale the next time Doran widens it. It was 14,
+# then 30, and 60 since 2026-08-25.
+WINDOW = config.profile()["hard_gates"]["freshness_days"]
+print(f"\nfreshness (Doran's {WINDOW}-day window)")
 
 fresh = make_posting(published_at=days_ago_iso(3))
-stale = make_posting(published_at=days_ago_iso(30))
+stale = make_posting(published_at=days_ago_iso(WINDOW + 5))
+# The band the window was widened INTO. A 45-day-old posting was dropped under
+# the old 30-day rule and must now survive -- that is the whole point of the
+# change, and a regression here would silently undo it.
+borderline = make_posting(published_at=days_ago_iso(45))
 
 check(
     "3-day-old posting passes",
     prefilter.evaluate(fresh, suppressed=set(), posting_fingerprint=fp_of(fresh)).passed,
     True,
 )
+check(
+    "45-day-old posting passes, which the old 30-day window rejected",
+    prefilter.evaluate(
+        borderline, suppressed=set(), posting_fingerprint=fp_of(borderline)
+    ).passed,
+    True,
+)
 res = prefilter.evaluate(stale, suppressed=set(), posting_fingerprint=fp_of(stale))
-check("30-day-old posting is dropped", res.passed, False)
-check("...and says why", "30 days ago" in res.reason, True)
+check("a posting past the window is dropped", res.passed, False)
+check("...and says why", f"{WINDOW + 5} days ago" in res.reason, True)
 check(
     "targeted mode ignores the window",
     prefilter.evaluate(

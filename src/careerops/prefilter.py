@@ -301,6 +301,17 @@ TITLE_BONUS_TERMS: dict[str, float] = {
     "marketing technology": 4.0,
     "ai operations": 4.0,
     "ai program": 3.0,
+    # Added 2026-08-25. These lift a genuine archetype title over the relevance
+    # floor without moving the floor itself, which is the safer of the two ways
+    # to recover a near-miss. "Director, AI Transformation" scored 39.0 against
+    # a floor of 40.0 and was dropped for one point.
+    "ai transformation": 5.0,
+    "ai strategy": 5.0,
+    "ai adoption": 5.0,
+    "ai solutions": 4.0,
+    "martech": 5.0,
+    "ai capabilities": 4.0,
+    "agentic": 4.0,
 }
 
 # Calibrated against 2,033 live postings from six companies. That corpus has a
@@ -487,11 +498,29 @@ def _reject_bands(track: str | None = None) -> list[str]:
     return profile.get("hard_gates", {}).get("reject_title_bands", [])
 
 
+# "CRO" is two different jobs. As a title band it means Chief Revenue Officer,
+# which is over-reach. In a marketing title it means conversion rate
+# optimization, which is track B's core capture vocabulary -- prefilter scores
+# "cro" at 5.0 under GROWTH_CAPTURE_TERMS. The band check killed Cresta's
+# "Growth Marketing Manager, Web & CRO", exactly the archetype it was meant to
+# protect. When the title carries conversion vocabulary, CRO is not a C-suite.
+_CRO_IS_CONVERSION = re.compile(
+    r"(conversion|optimi[sz]ation|\bweb\b|website|landing page|experimentation|"
+    r"a/b test|growth marketing)",
+    re.IGNORECASE,
+)
+
+
 def _title_band_rejected(title: str, track: str | None = None) -> str | None:
-    lowered = f" {clean(title).lower()} "
+    cleaned = clean(title)
+    lowered = f" {cleaned.lower()} "
     for band in _reject_bands(track):
-        if re.search(rf"\b{re.escape(str(band).lower())}\b", lowered):
-            return str(band)
+        name = str(band).lower()
+        if not re.search(rf"\b{re.escape(name)}\b", lowered):
+            continue
+        if name == "cro" and _CRO_IS_CONVERSION.search(cleaned):
+            continue
+        return str(band)
     return None
 
 
@@ -545,6 +574,81 @@ def _has_both_sides(matched: list[str]) -> bool:
     )
 
 
+# Bay Area city names are not unique. Belmont is also in Massachusetts,
+# Newark in New Jersey, Richmond in Virginia, Dublin in Ohio, Concord in New
+# Hampshire. These patterns are what stop a Texas job from being read as a
+# ten-minute commute.
+#
+# Two-letter codes are only honoured in the 'City, ST' position -- after a
+# comma. Half of them are ordinary English words (IN, OR, ME, OK, HI, LA, DE,
+# ID, CO, PA), so matching them loose turns 'Offices in San Francisco' into a
+# posting in Indiana. Full state names are matched anywhere.
+_CALIFORNIA = re.compile(
+    r'(,\s*(ca|calif)\b)|(\bcalifornia\b)', re.IGNORECASE
+)
+_STATE_CODE_AFTER_COMMA = r',\s*(?:al|ak|az|ar|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b'
+_STATE_NAME = r'\b(?:alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
+_NON_CA_STATE = re.compile(
+    _STATE_CODE_AFTER_COMMA + r'|' + _STATE_NAME, re.IGNORECASE
+)
+# Used on the text immediately following a matched city, where a state code
+# may legitimately lead with its comma already stripped.
+_TRAILING_STATE = re.compile(
+    r'^(?:al|ak|az|ar|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b|^(?:alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b', re.IGNORECASE
+)
+
+
+def reachable_cities_in(text: str | None) -> list[tuple[str, int]]:
+    """Every commutable city named anywhere in `text`, nearest first.
+
+    ATS location strings are not addresses, they are decorated free text:
+    "CA - San Francisco" (reversed), "San Mateo - Bovet" (a building code),
+    "San Francisco Bay Area" (a region), "Denver, CO; New York City, NY;
+    San Francisco, CA" (a list whose Bay Area office is last). `parse_location`
+    picks one city out of that and is wrong often enough to matter -- an Asurion
+    role five minutes from Doran's house was rejected as "unknown location"
+    because the raw string was "San Mateo - Bovet".
+
+    So the raw string gets read for city names directly, the same way
+    alternate_base_cities already reads the posting body.
+
+    Bay Area city names are NOT unique, which is the trap here: there is a
+    Belmont in Massachusetts, a Newark in New Jersey, a Richmond in Virginia and
+    a Dublin in Ohio. Matching on the name alone turns "Austin, TX (Belmont
+    Campus)" into a ten-minute commute. So a match is dropped when the string
+    puts it in a state that is not California -- either right after the city, or
+    anywhere in a string that never mentions California at all.
+    """
+    known = (config.commute_table().get("cities", {}) or {})
+    limit = config.profile().get("hard_gates", {}).get("max_commute_minutes", 60)
+    lowered = (text or "").lower()
+    if not lowered:
+        return []
+
+    says_california = bool(_CALIFORNIA.search(lowered))
+    other_state = bool(_NON_CA_STATE.search(lowered))
+    # Every state named here is somewhere else. Nothing in this string is in
+    # commuting range, however familiar the city name looks.
+    if other_state and not says_california:
+        return []
+
+    found: dict[str, int] = {}
+    for city, minutes in known.items():
+        if minutes > limit:
+            continue
+        name = city.lower()
+        match = re.search(rf"\b{re.escape(name)}\b", lowered)
+        if not match:
+            continue
+        # "Newark, NJ" inside a string that also names a California office is
+        # still the New Jersey one.
+        trailing = lowered[match.end():match.end() + 24]
+        if _TRAILING_STATE.match(trailing.lstrip(" ,-/(")):
+            continue
+        found[city] = minutes
+    return sorted(found.items(), key=lambda kv: kv[1])
+
+
 def alternate_base_cities(description: str | None) -> list[tuple[str, int]]:
     """Reachable cities named in the posting's basing clauses, nearest first.
 
@@ -583,8 +687,17 @@ def geo_allowed(city: str | None, work_model: str | None,
     if minutes is not None and minutes <= limit:
         return True, ""
 
-    # The listed city is unknown or too far -- check whether the posting names a
-    # reachable alternate office before rejecting it.
+    # The listed city is unknown or too far. Before rejecting, read the raw
+    # location string and then the posting body for a reachable office -- in
+    # that order, because the raw string is the employer stating where the job
+    # is, while the body is only inference.
+    in_raw = reachable_cities_in(raw)
+    if in_raw:
+        best, best_minutes = in_raw[0]
+        if minutes is None or best_minutes < minutes:
+            return True, (f"parsed as {city or raw!r} but the posting's location "
+                          f"names {best} (~{best_minutes} min)")
+
     alternates = alternate_base_cities(description)
     if alternates:
         best, best_minutes = alternates[0]
@@ -618,7 +731,7 @@ def evaluate(
     # 2. Freshness.
     published = _field(posting, "published_at")
     if enforce_freshness:
-        window = freshness_days if freshness_days is not None else gates.get("freshness_days", 14)
+        window = freshness_days if freshness_days is not None else gates.get("freshness_days", 60)
         age = age_days(published)
         if age is None:
             if not first_sighting:

@@ -2,7 +2,7 @@
 
 Two artifacts, deliberately different:
 
-  * The terminal report is EXACTLY the six fields Doran asked for. Scores and
+  * The terminal report is EXACTLY the eight fields Doran asked for. Scores and
     Block G detail stay out of it. The single exception is a Block G FLAG, which
     adds one warning line -- hiding a legitimacy concern would defeat the point
     of running the check.
@@ -68,6 +68,45 @@ def commute_field(row: sqlite3.Row) -> str | None:
     return f"Estimated Commute: {result.minutes} min door-to-door from San Mateo 94403"
 
 
+def aggregator_slugs() -> set[str]:
+    """ATS slugs that belong to job boards reposting other companies' roles.
+
+    Jobgether and its kind run a real Lever board, so structurally they look
+    exactly like an employer. Nothing in the feed says otherwise -- only this
+    list does.
+    """
+    listed = (config.profile().get("discovery") or {}).get("aggregator_slugs") or []
+    return {str(slug).strip().lower() for slug in listed if str(slug).strip()}
+
+
+def is_aggregator(row: sqlite3.Row) -> bool:
+    try:
+        slug = (row["source_slug"] or "").strip().lower()
+    except (IndexError, KeyError, TypeError):
+        return False
+    # source_slug is "<slug>" on Lever/Greenhouse and "<slug>:<tenant>:<board>"
+    # on Workday, so compare the leading segment.
+    return slug.split(":")[0] in aggregator_slugs()
+
+
+def _company_field(row: sqlite3.Row) -> str:
+    """Who is hiring, as the first line of every posting block.
+
+    Doran asked for this on 2026-08-25: a report of ten roles with titles, links
+    and commutes but no employer names is unreadable at a glance -- he could not
+    tell which company any of them was for without opening the link.
+
+    Where the posting came through a reseller that hides its client, the reseller
+    is named as the reseller rather than presented as the employer. The Block G
+    warning line already says the employer is unnamed; this stops the top line
+    from asserting something untrue.
+    """
+    name = (row["company"] or "").strip() or "Not stated"
+    if is_aggregator(row):
+        return f"{name} (job board - actual employer not named)"
+    return name
+
+
 def _connection_field(row: sqlite3.Row) -> str | None:
     """Say out loud that a score was raised by a personal connection.
 
@@ -88,10 +127,11 @@ def _connection_field(row: sqlite3.Row) -> str | None:
 def render_matches(rows: list[sqlite3.Row]) -> str:
     """The match list Doran reads.
 
-    Seven fields, plus an eighth on hybrid and on-site roles only: the estimated
+    Eight fields, plus a ninth on hybrid and on-site roles only: the estimated
     commute in minutes. Posted date was added at his request -- knowing a posting
     is 3 days old versus 28 changes how urgently he acts on it -- and the commute
-    line for the same reason, on 2026-08-15.
+    line for the same reason, on 2026-08-15. Company leads the block from
+    2026-08-25: a list of ten roles with no employer names cannot be skimmed.
     """
     if not rows:
         return "No postings scored 4.0 or higher this run."
@@ -99,6 +139,7 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
     blocks = []
     for row in rows:
         block = [
+            f"Company: {_company_field(row)}",
             f"Job Title: {row['title']}",
             f"Link to Post: {row['url']}",
             f"City: {row['city'] or row['location_raw'] or 'Not stated'}",
@@ -139,7 +180,7 @@ LIST_HEADERS = {
 
 
 def render_list(track: str, rows: list[sqlite3.Row]) -> str:
-    """One titled list. Both tracks use the identical seven-field format."""
+    """One titled list. Both tracks use the identical eight-field format."""
     title, blurb = LIST_HEADERS.get(track, (track.upper(), ""))
     rule = "=" * max(len(title), 44)
     head = [rule, title, rule, ""]
@@ -184,8 +225,13 @@ def render_worth_knowing(rows: list[sqlite3.Row]) -> str:
         if row["work_model"] != WORK_REMOTE:
             result = commute_mod.evaluate(row["city"], row["work_model"])
             model += f" {result.minutes} min" if result.known else " commute unknown"
+        # Same honesty rule as the match list: a reseller is named as a reseller,
+        # never as the employer.
+        who = row["company"]
+        if is_aggregator(row):
+            who = f"{who} (job board, employer not named)"
         lines.append(
-            f"  - {row['weighted_score']:.2f}  {row['title']} @ {row['company']}"
+            f"  - {row['weighted_score']:.2f}  {row['title']} @ {who}"
             f"  [{model}, posted {str(row['published_at'] or '')[:10]}]"
         )
         lines.append(f"      {row['url']}")

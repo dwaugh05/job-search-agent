@@ -15,12 +15,26 @@ from ..models import Posting
 from ..normalize import clean, parse_datetime, parse_location, parse_work_model, strip_html
 
 NAME = "smartrecruiters"
-URL = "https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100"
+URL = "https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit={limit}&offset={offset}"
 DETAIL_URL = "https://api.smartrecruiters.com/v1/companies/{slug}/postings/{posting_id}"
 
+# The API's own maximum per request.
+PAGE_SIZE = 100
+# Enough for the largest employer on the watch list, with headroom. The response
+# carries totalFound, so paging stops on its own well before this in every normal
+# case -- this only bounds a pathological board.
+MAX_PAGES = 12
 
-def build_url(slug: str) -> str:
-    return URL.format(slug=slug)
+
+def build_url(slug: str, offset: int = 0, limit: int = PAGE_SIZE) -> str:
+    return URL.format(slug=slug, limit=limit, offset=offset)
+
+
+def total_found(payload: Any) -> int | None:
+    """How many postings the employer actually has, per the API itself."""
+    if isinstance(payload, dict) and isinstance(payload.get("totalFound"), int):
+        return payload["totalFound"]
+    return None
 
 
 def detail_url(slug: str, posting_id: str) -> str:

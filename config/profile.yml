@@ -61,7 +61,15 @@ hard_gates:
   # matches: GitLab's "AI Transformation Owner, CRO" scored 4.84 -- second only
   # to the ceiling anchor -- and was dropped for being 21 days old. Roles in this
   # archetype are rare enough that a tight window costs more than it saves.
-  freshness_days: 30
+  #
+  # Widened again 30 -> 60 on 2026-08-25, for the same reason and on measured
+  # evidence: freshness is by far the largest rejection bucket (15,699 of 28,493
+  # rejections, 55%), and re-running every other gate over those rejects found 49
+  # postings in the 31-60 day band that cleared everything else -- Customer.io
+  # "GTM AI Engineer", Vanta "Sr. AI GTM Engineer", Webflow "Staff Product
+  # Manager, AI". Past 60 days the yield turns mostly to ghost postings, which is
+  # also where evergreen_days below starts flagging them.
+  freshness_days: 60
   # A posting we have personally been watching for longer than this, while its
   # feed still claims to be fresh, is flagged as evergreen or reposted -- not
   # rejected. Greenhouse's own published data puts 18-22% of postings in its ATS
@@ -199,3 +207,23 @@ politeness:
   # evaluation queue, not just this run's traffic. Raised 30 -> 60 on
   # 2026-08-14 at Doran's request.
   board_resolve_cap: 60
+  # How many Built In job pages one scan may read to learn the employer name.
+  # Built In listing pages do not carry the company, so an on-archetype title
+  # costs one extra request to identify. Measured 2026-08-25: eight Built In
+  # URLs return ~174 on-archetype leads, ~0.85s each including the politeness
+  # gap, so 250 is roughly a 3.5-minute ceiling on this stage.
+  builtin_detail_cap: 250
+  # How many postings one scan may read straight off a board page, for employers
+  # with no reachable ATS plus anything over board_resolve_cap. One request each
+  # against linkedin.com, the host this whole channel depends on staying friendly.
+  board_read_cap: 200
+
+# How the net is cast, and what to distrust once it comes back.
+discovery:
+  # Boards that run a normal ATS but repost other companies' roles without
+  # naming the employer. Structurally they are indistinguishable from a real
+  # company -- Jobgether has a genuine Lever board -- so the report needs this
+  # list to avoid printing "Jobgether" as though Jobgether were hiring.
+  # Seven of the twelve matches in run 14 came through one of these.
+  aggregator_slugs:
+    - jobgether

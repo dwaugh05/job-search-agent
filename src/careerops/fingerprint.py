@@ -58,6 +58,36 @@ def description_hash(description: str | None) -> str:
     return hashlib.sha256(normalize_text(description).encode("utf-8")).hexdigest()
 
 
+# Reseller boards repost one role once per country, changing nothing but the
+# country name -- which sits in the opening sentence, inside the window
+# fingerprint() hashes. Measured 2026-08-25: 25 rows titled "AWS Cloud Engineer"
+# produced 25 distinct fingerprints; strip this preamble and all 25 collapse to
+# one body. In run 14 that pattern cost 42 of 140 scoring slots -- 30% of the
+# run -- with Claude re-reading text it had just read.
+#
+# This is used for a run-level duplicate check, NOT inside fingerprint() itself.
+# fingerprint() feeds suppression -- the "never show me the same job twice"
+# guarantee -- and changing it would orphan every fingerprint already stored,
+# resurfacing postings Doran has already rejected.
+_AGGREGATOR_PREAMBLE = re.compile(
+    r"^this position is listed on behalf of a partner company.{0,200}?"
+    r"\bbased in\b[a-z ]{0,40}?(?=\bthis is\b|\bthe role\b|\byou will\b|\bour\b)"
+)
+
+
+def clone_key(company: str, title: str, description: str | None) -> str:
+    """Identity of a role with a reseller's per-country boilerplate removed.
+
+    Deliberately separate from fingerprint(): this one is allowed to change
+    whenever a new aggregator pattern is learned, because nothing durable is
+    keyed on it. If the preamble does not match, this degrades to an ordinary
+    full-body hash -- i.e. to the current behaviour, never to a wrong merge.
+    """
+    body = _AGGREGATOR_PREAMBLE.sub("", normalize_text(description))
+    basis = "|".join((normalize_company(company), normalize_title(title), body))
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
+
+
 def fingerprint(company: str, title: str, description: str | None) -> str:
     """Stable identity for a role across reposts and ATS id churn."""
     prefix = normalize_text(description)[:DESC_PREFIX_CHARS]

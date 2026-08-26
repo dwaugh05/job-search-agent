@@ -1,5 +1,5 @@
 ---
-description: Sweep all watched companies for live postings from the last 30 days, score them A-G, and report matches scoring 4.0+
+description: Sweep all watched companies for live postings from the last 60 days, score them A-G, and report matches scoring 4.0+
 ---
 
 Run a broad job scan. Follow these steps exactly.
@@ -11,7 +11,7 @@ python cli.py scan
 ```
 
 This sweeps every live, watched company in `config/sources.yml`, applies the
-deterministic gates (14-day freshness, fingerprint suppression, geography, title
+deterministic gates (60-day freshness, fingerprint suppression, geography, title
 band, comp floor, content relevance, killer terms), confirms each survivor's apply
 URL is live, and writes an evaluation queue.
 
@@ -80,9 +80,9 @@ hides it.
 python cli.py report --run <run_id>
 ```
 
-Print the output exactly as rendered. Seven fields per posting — Job Title, Link,
-City, Salary Range, Work Model, **Posted date**, Fit Summary — plus the "Worth
-knowing about" tier beneath. Postings are marked as presented at this point and
+Print the output exactly as rendered. Eight fields per posting — **Company**, Job
+Title, Link, City, Salary Range, Work Model, **Posted date**, Fit Summary — plus
+the "Worth knowing about" tier beneath. Postings are marked as presented at this point and
 will never appear in a future scan.
 
 **Estimated Commute is an eighth field, and it appears on hybrid and on-site

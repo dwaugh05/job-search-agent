@@ -162,7 +162,14 @@ SR_DETAIL_CAP = 60
 _SR_WORTH_DETAIL = re.compile(
     r"(market|growth|brand|demand|gtm|go.to.market|content|web|digital|"
     r"communication|revenue|ai\b|artificial intelligence|automation|enablement|"
-    r"technolog|operations|campaign|lifecycle|product marketing)",
+    r"technolog|operations|campaign|lifecycle|product marketing|"
+    # Added 2026-08-25. This screen decides which SmartRecruiters and Workday
+    # titles are worth a detail fetch, and "MarTech Engineer" cleared none of
+    # the stems above -- "market" needs the k, "technolog" needs the o. A title
+    # in Doran's own known_title_variants list was invisible on two whole ATS
+    # platforms.
+    r"martech|agentic|applied ai|solutions? architect|solutions? engineer|"
+    r"revops|answer engine|aeo\b|llm|generative|copilot|prompt)",
     re.IGNORECASE,
 )
 
@@ -353,10 +360,45 @@ def fetch_company(
         if ats == workday.NAME:
             return _fetch_workday(client, slug, company, on_note)
 
-        payload = _get_json(client, adapter.build_url(slug))
-        if payload is None:
-            return []
-        raw_jobs = adapter.extract_jobs(payload)
+        if ats == smartrecruiters.NAME:
+            # The list endpoint caps at 100 per request and this code only ever
+            # asked once, so every posting past the hundredth at any employer was
+            # invisible -- Freshworks reports 163. The response states totalFound,
+            # so paging stops as soon as we have them all.
+            raw_jobs = []
+            payload = None
+            for page in range(smartrecruiters.MAX_PAGES):
+                batch_payload = _get_json(
+                    client,
+                    adapter.build_url(slug, offset=page * smartrecruiters.PAGE_SIZE),
+                )
+                if batch_payload is None:
+                    # A failure partway through leaves a partial board. Say so --
+                    # silently returning half an employer's postings is the same
+                    # class of bug as the 100-posting cap this pagination fixed.
+                    if page and on_note:
+                        on_note(
+                            f"{company}: SmartRecruiters page {page + 1} failed, "
+                            f"only the first {len(raw_jobs)} postings were read"
+                        )
+                    break
+                payload = payload or batch_payload
+                batch = adapter.extract_jobs(batch_payload)
+                if not batch:
+                    break
+                raw_jobs.extend(batch)
+                total = smartrecruiters.total_found(batch_payload)
+                if total is not None and len(raw_jobs) >= total:
+                    break
+                if len(batch) < smartrecruiters.PAGE_SIZE:
+                    break
+            if payload is None:
+                return []
+        else:
+            payload = _get_json(client, adapter.build_url(slug))
+            if payload is None:
+                return []
+            raw_jobs = adapter.extract_jobs(payload)
 
         postings: list[Posting] = []
         if ats == smartrecruiters.NAME:

@@ -1409,13 +1409,40 @@ companies:
   status: live
   watch: true
 browser_boards:
-- key: builtin_sf
-  label: Built In SF
-  url: https://www.builtinsf.com/jobs/hybrid/remote/dev-engineering/marketing
+- key: builtin_sf_marketing
+  label: Built In SF - Marketing, all work models
+  url: https://www.builtinsf.com/jobs/marketing
   enabled: true
-- key: builtin_remote
-  label: Built In - Remote
+  note: No work-model segment on purpose. The old /hybrid/remote/ path hid every on-site Bay Area role.
+- key: builtin_remote_marketing
+  label: Built In - Remote Marketing
   url: https://builtin.com/jobs/remote/marketing
+  enabled: true
+- key: builtin_marketing
+  label: Built In - Marketing, all work models
+  url: https://builtin.com/jobs/marketing
+  enabled: true
+- key: builtin_q_ai_enablement
+  label: Built In search - AI enablement
+  url: https://builtin.com/jobs?search=AI%20enablement
+  enabled: true
+  note: Keyword sweeps ignore Built In's category tree, which is the only way to reach roles filed under
+    engineering, operations or consulting. Verified unauthenticated 2026-08-25 - ?search= needs no session.
+- key: builtin_q_marketing_ai
+  label: Built In search - marketing AI
+  url: https://builtin.com/jobs?search=marketing%20AI
+  enabled: true
+- key: builtin_q_marketing_engineer
+  label: Built In search - marketing engineer
+  url: https://builtin.com/jobs?search=marketing%20engineer
+  enabled: true
+- key: builtin_q_gtm_engineer
+  label: Built In search - GTM engineer
+  url: https://builtin.com/jobs?search=GTM%20engineer
+  enabled: true
+- key: builtin_q_ai_solutions
+  label: Built In search - AI solutions engineer
+  url: https://builtin.com/jobs?search=AI%20solutions%20engineer
   enabled: true
 - key: linkedin
   label: LinkedIn (uses Doran's logged-in session)

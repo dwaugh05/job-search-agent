@@ -21,7 +21,7 @@ Greenhouse — so never hand-edit one.
 
 Two behavioural differences from a broad scan, both deliberate:
 
-- **No 14-day window by default.** When Doran names specific companies he wants to
+- **No freshness window by default.** When Doran names specific companies he wants to
   know what is open there now, and a freshness filter would usually return nothing.
   Add `--fresh` if he asks for recent postings only.
 - **Suppression and liveness still apply.** He still never sees a repeat, and never
@@ -62,7 +62,7 @@ and say so rather than guessing.
 python cli.py report --run <run_id> --companies "$ARGUMENTS"
 ```
 
-Print the seven-field list for anything scoring 4.0+ — including the **posted
+Print the eight-field list for anything scoring 4.0+ — including the **posted
 date**, which he asked for specifically.
 
 Two things `cli.py report` now does for you, both added on Doran's instruction on
