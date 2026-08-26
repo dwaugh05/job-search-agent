@@ -1333,6 +1333,81 @@ companies:
   slug: employ
   status: live
   watch: true
+- name: CookUnity
+  ats: greenhouse
+  slug: cookunity
+  status: live
+  watch: true
+- name: Publicis Groupe
+  ats: greenhouse
+  slug: public
+  status: live
+  watch: true
+- name: Jobgether
+  ats: lever
+  slug: jobgether
+  status: live
+  watch: true
+- name: Starbridge
+  ats: ashby
+  slug: starbridge
+  status: live
+  watch: true
+- name: Torq
+  ats: greenhouse
+  slug: torq
+  status: live
+  watch: true
+- name: Convex
+  ats: workday
+  slug: servicetitan:wd1:ServiceTitan
+  status: live
+  watch: true
+- name: Pacific Life
+  ats: workday
+  slug: pacificlife:wd1:PacificLifeCareers
+  status: live
+  watch: true
+- name: Vanguard
+  ats: workday
+  slug: vanguard:wd5:contractors_restricted
+  status: live
+  watch: true
+- name: Delta Faucet Company
+  ats: workday
+  slug: masco:wd1:DeltaFaucet
+  status: live
+  watch: true
+- name: CoreWeave
+  ats: greenhouse
+  slug: coreweave
+  status: live
+  watch: true
+- name: Maven AGI
+  ats: ashby
+  slug: maven-agi
+  status: live
+  watch: true
+- name: Neural Concept
+  ats: ashby
+  slug: neuralconcept
+  status: live
+  watch: true
+- name: Liquid AI
+  ats: ashby
+  slug: liquid-ai
+  status: live
+  watch: true
+- name: FurtherAI
+  ats: ashby
+  slug: furtherai
+  status: live
+  watch: true
+- name: Shelf
+  ats: greenhouse
+  slug: shelf
+  status: live
+  watch: true
 browser_boards:
 - key: builtin_sf
   label: Built In SF
