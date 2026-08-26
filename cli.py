@@ -328,21 +328,34 @@ def cmd_report(args: argparse.Namespace) -> int:
             near = [r for r in store.near_misses(conn, threshold, names)
                     if r["company"].lower() not in shown]
 
-        # Built as one string, then printed AND archived, so the markdown file
-        # is byte-for-byte what Doran saw rather than a second rendering of it.
-        parts = [report.render_both_lists(matches, backup)]
-
         # Anything just under the bar gets a one-line mention rather than being
         # silently dropped -- Doran asked explicitly not to have near-misses
-        # hidden from him.
+        # hidden from him. Computed per track: a single shared pool let the
+        # generally-higher-scoring growth track fill the whole cap and
+        # silently crowd out ai_enablement near-misses.
         review = config.profile().get("review", {})
         floor = float(review.get("worth_knowing_floor", 3.7))
         cap = int(review.get("max_worth_knowing", 3))
         shown_ids = {row["id"] for row in matches}
-        worth = [r for r in store.worth_knowing(conn, threshold, floor, cap)
-                 if r["id"] not in shown_ids]
-        if worth:
-            parts.append(report.render_worth_knowing(worth))
+        backup_shown_ids = shown_ids | {row["id"] for row in backup}
+
+        worth_ai = [r for r in store.worth_knowing(
+            conn, threshold, floor, cap, track=config.TRACK_AI)
+            if r["id"] not in shown_ids]
+        worth_growth = [r for r in store.worth_knowing(
+            conn, growth_threshold, floor, cap, track=config.TRACK_GROWTH)
+            if r["id"] not in backup_shown_ids]
+
+        # Built as one string, then printed AND archived, so the markdown file
+        # is byte-for-byte what Doran saw rather than a second rendering of it.
+        parts = [report.render_list(config.TRACK_AI, matches)]
+        if worth_ai:
+            parts.append(report.render_worth_knowing(worth_ai))
+        parts.append("\n")
+        parts.append(report.render_list(config.TRACK_GROWTH,
+                                         [r for r in backup if r["id"] not in shown_ids]))
+        if worth_growth:
+            parts.append(report.render_worth_knowing(worth_growth))
 
         if near:
             parts.append(report.render_near_misses(near))

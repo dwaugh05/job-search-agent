@@ -452,25 +452,33 @@ def presentable(conn: sqlite3.Connection, threshold: float,
 
 
 def worth_knowing(conn: sqlite3.Connection, threshold: float,
-                  floor: float, limit: int = 3) -> list[sqlite3.Row]:
+                  floor: float, limit: int = 3,
+                  track: str | None = None) -> list[sqlite3.Row]:
     """Evaluated postings just under the bar, so nothing good is silently hidden.
 
     Hard-capped and rendered as one line each -- this exists so a near-miss gets
     a mention, not so the report can quietly grow into a spray-and-pray list.
+
+    `track` scopes this to one list's near-misses. Without it, a track with
+    generally higher scores (e.g. growth) can fill the whole cap and silently
+    crowd out near-misses from the other track -- exactly the hiding this
+    function exists to prevent.
     """
-    return conn.execute(
-        """
+    sql = """
         SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict, e.block_g_flags
         FROM postings p
         JOIN evaluations e ON e.id = (
-            SELECT id FROM evaluations WHERE posting_id = p.id ORDER BY id DESC LIMIT 1
+            SELECT id FROM evaluations
+            WHERE posting_id = p.id AND (? IS NULL OR track = ?)
+            ORDER BY id DESC LIMIT 1
         )
         WHERE p.state = ? AND p.is_live = 1
           AND e.weighted_score < ? AND e.weighted_score >= ?
           AND e.block_g_verdict != 'FAIL'
         ORDER BY e.weighted_score DESC LIMIT ?
-        """,
-        (STATE_EVALUATED, threshold, floor, limit),
+    """
+    return conn.execute(
+        sql, (track, track, STATE_EVALUATED, threshold, floor, limit),
     ).fetchall()
 
 
