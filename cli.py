@@ -731,6 +731,59 @@ def cmd_refresh_tokens(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_recompute_tracks(args: argparse.Namespace) -> int:
+    """Re-derive which bucket each already-scored posting belongs to.
+
+    `postings.tracks` decides which of the three lists a posting appears in, and
+    it is written once, at scan time. So a change to the bucketing rules applies
+    to everything scanned afterwards and silently misses everything already on
+    record -- which is exactly what happened when the marketing-in-AI-clothing
+    rule landed: Vercel and Apollo kept the overlap bucket they were assigned
+    before the rule existed, and stayed on the lenient list the rule was written
+    to move them off.
+
+    Nothing here re-scores anything. It only re-answers "which list?".
+    """
+    changed = []
+    with store.connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM postings WHERE state IN ('evaluated', 'presented')"
+        ).fetchall()
+        for row in rows:
+            result = prefilter_mod.evaluate(
+                row, suppressed=set(),
+                posting_fingerprint=str(row["fingerprint"]),
+                enforce_freshness=False,
+            )
+            fresh = ",".join(result.tracks)
+            if fresh == (row["tracks"] or ""):
+                continue
+            # A posting that now fails the gates outright keeps its tracks. It
+            # was judged under the rules of its day and this command's job is
+            # routing, not retroactive rejection.
+            if not result.tracks:
+                continue
+            changed.append((row, fresh))
+            if not args.dry_run:
+                conn.execute("UPDATE postings SET tracks = ? WHERE id = ?",
+                             (fresh, row["id"]))
+
+    if not changed:
+        print(f"All {len(rows)} scored postings are already in the right bucket.")
+        return 0
+
+    verb = "would move" if args.dry_run else "moved"
+    print(f"{verb} {len(changed)} of {len(rows)} scored posting(s):\n")
+    for row, fresh in changed:
+        before = config.bucket_label(config.bucket_of(row["tracks"]))
+        after = config.bucket_label(config.bucket_of(fresh))
+        print(f"  {row['company'][:20]:22s} {row['title'][:38]:40s} "
+              f"{before} -> {after}")
+    if args.dry_run:
+        print("\nDry run. Nothing was written.")
+    return 0
+
+
 def cmd_tiebreak(args: argparse.Namespace) -> int:
     """List the close calls a holistic read is allowed to touch.
 
@@ -980,6 +1033,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--track", choices=list(config.TRACKS),
                    help="which list these scores belong to (default: ai_enablement)")
     p.set_defaults(func=cmd_record_eval)
+
+    p = sub.add_parser("recompute-tracks",
+                       help="re-derive which list each scored posting belongs in")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=cmd_recompute_tracks)
 
     p = sub.add_parser("tiebreak", help="worksheet of close calls for a holistic read")
     p.add_argument("--run", type=int)
