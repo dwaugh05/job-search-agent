@@ -247,9 +247,32 @@ Then: `python cli.py record-eval --run <id> --file data/runs/<id>/scores.json`
 format: *"spot on and perfect in helping me understand what they're about and your
 ratings and why I would fit them or not."* Match it.
 
+**The job of this summary is to replace the posting.** Doran, 2026-08-28: *"the
+ultimate goal in writing this summary is really so that I don't need to read the
+entire job posting, so it's good to quote some sentences verbatim from the
+posting as evidence citations about the fit."* If he still has to open the link
+to know what the job is, the summary failed.
+
+### The format, and it is checked
+
+`cli.py record-eval` runs `report.fit_summary_issues()` over every summary and
+prints a FIT SUMMARY warning for any that misses this. It warns rather than
+blocks, so a warning is a rewrite instruction, not a suggestion.
+
+| Rule | Why |
+| --- | --- |
+| **Exactly 2 paragraphs** | What the job asks for, then how it fits him. Never one blob. |
+| **At least 2 verbatim quotes** from the posting | These are the evidence citations. He is reading them instead of the posting. |
+| **6 sentences maximum, both paragraphs combined** | It is a tl;dr. Run 14's best summaries ran 5-6. |
+| **320 characters minimum** | Below that it cannot carry the job's actual content. |
+
 **Two paragraphs, not one blob.**
 
-**Paragraph one - what the role is and what maps to him.** Open with what he'd
+**Paragraph one - what the posting is ASKING FOR, in its own words.** Lead with
+the most prevalent thing the posting says the job actually does, and quote it.
+Weight what the posting itself weights: the top two or three responsibilities
+are the real mandate, and the amount of column space a theme gets tells you how
+much the employer cares about it. Open with what he'd
 actually be doing day to day, in plain terms. Then map it to **named, specific**
 proof points: the 50-marketer listening tour that became the AI roadmap, the
 200-person upskilling programme, the office hours and hackathons, the power-user

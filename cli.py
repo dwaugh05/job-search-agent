@@ -8,6 +8,7 @@ there never will be (see CLAUDE.md).
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 from datetime import datetime
@@ -16,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from careerops import applications, config, pipeline, report, resolve, store  # noqa: E402
+from careerops import prefilter as prefilter_mod  # noqa: E402
 from careerops.models import VERDICTS  # noqa: E402
 from careerops.sources.registry import _client, probe  # noqa: E402
 
@@ -200,18 +202,30 @@ def cmd_queue(args: argparse.Namespace) -> int:
 
 def cmd_record_eval(args: argparse.Namespace) -> int:
     payload = json.loads(Path(args.file).read_text(encoding="utf-8"))
-    track = payload.get("track", args.track or config.TRACK_AI)
-    scoring = config.scoring(track)
-    weights = {str(d["id"]): float(d["weight"]) for d in scoring["dimensions"]}
-    cap = float(scoring.get("evidence", {}).get("cap_without_evidence", 3.0))
-    total_weight = sum(weights.values())
+    # File-level track is now only a DEFAULT. Each evaluation may name its own,
+    # because a queue mixes buckets and the rubric has to follow the posting:
+    # a marketing-only role judged against scoring.yml cannot clear the bar,
+    # since dimension 1 (weight 22) makes AI enablement the hard requirement.
+    default_track = payload.get("track", args.track or config.TRACK_AI)
+
+    @functools.lru_cache(maxsize=None)
+    def _rubric_for(track: str):
+        rubric = config.scoring(track)
+        return (
+            rubric,
+            {str(d["id"]): float(d["weight"]) for d in rubric["dimensions"]},
+            float(rubric.get("evidence", {}).get("cap_without_evidence", 3.0)),
+        )
     connections_cfg = config.connections()
     conn_bump = float(connections_cfg.get("bump", 1.0))
     max_score = float(connections_cfg.get("max_score", 5.0))
 
     written = 0
+    thin = 0
     with store.connect() as conn:
         for item in payload.get("evaluations", []):
+            track = item.get("track") or default_track
+            scoring, weights, cap = _rubric_for(track)
             raw_dims = item.get("dimension_scores") or {}
             # A dimension explicitly set to null is NOT scored -- its weight is
             # dropped from the denominator so it is genuinely neutral. This is
@@ -250,6 +264,23 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
                         print(f"  posting {item.get('posting_id')}: dimension {dim_id} "
                               f"capped at {cap} (no quoted evidence in block {block})")
 
+            # The Director rule, enforced rather than remembered. A Director or
+            # above scores full marks on seniority ONLY if the block B note
+            # names one of the two disciplines Doran clears at that level: AI
+            # enablement/transformation, or growth and web marketing. Written as
+            # a rubric instruction twice and forgotten twice -- run 25 gave
+            # Freshworks "Director, GTM Systems Architecture" a 5.0.
+            posting_row = store.get_posting(conn, int(item["posting_id"]))
+            title = (posting_row["title"] if posting_row else "") or ""
+            seniority_limit = prefilter_mod.seniority_cap(
+                title, str(notes.get("B", "")))
+            if seniority_limit is not None and "3" in dims:
+                if dims["3"] > seniority_limit:
+                    dims["3"] = seniority_limit
+                    print(f"  posting {item.get('posting_id')}: dimension 3 capped "
+                          f"at {seniority_limit} - a senior title whose block B note "
+                          "names no discipline Doran clears at that level")
+
             active = {k: w for k, w in weights.items() if k in dims}
             weighted = sum(dims[k] * active[k] for k in active) / sum(active.values())
 
@@ -281,9 +312,19 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
             # `adjustment` so the DB can still tell a scope deduction apart from
             # a relationship bonus, and hard-capped so it can never invent a
             # score above the top of the scale.
-            posting_row = store.get_posting(conn, int(item["posting_id"]))
+            # posting_row was already read above for the seniority cap.
             connection_bonus = conn_bump if _is_connection(posting_row) else 0.0
             weighted = min(max_score, weighted + connection_bonus)
+
+            # The Fit Summary is what Doran reads INSTEAD of the posting, so a
+            # thin one silently costs him the thing the report exists for.
+            # Checked mechanically because the written house style drifted
+            # anyway -- see report.fit_summary_issues.
+            summary_problems = report.fit_summary_issues(item.get("fit_summary"))
+            if summary_problems:
+                thin += 1
+                print(f"  posting {item.get('posting_id')}: FIT SUMMARY - "
+                      + "; ".join(summary_problems))
 
             store.record_evaluation(
                 conn,
@@ -307,61 +348,68 @@ def cmd_record_eval(args: argparse.Namespace) -> int:
             print(f"  posting {item['posting_id']}: {weighted:.2f}"
                   f"{scope_note}{conn_note} [G={item.get('block_g_verdict', 'PASS')}]")
     print(f"\nRecorded {written} evaluation(s).")
+    if thin:
+        print(f"WARNING: {thin} fit summary(ies) fall short of the house style. "
+              "Doran reads these INSTEAD of the posting - see 'Writing the Fit "
+              "Summary' in rubric/rubric-A-G.md and rewrite them before reporting.")
     return 0
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    threshold = args.threshold if args.threshold is not None else _threshold()
     with store.connect() as conn:
         review = config.profile().get("review", {})
         limit = int(review.get("max_results_per_report", 12))
+        floor_gap = float(review.get("worth_knowing_gap", 0.30))
+        cap = int(review.get("max_worth_knowing", 3))
 
-        matches = store.presentable(conn, threshold, track=config.TRACK_AI)[:limit]
+        # THREE BUCKETS, THREE BARS. Doran, 2026-08-28: "there's the traditional
+        # marketing role and then there's the AI role. And then there's a third
+        # bucket of where they overlap. And so I want to know about all three of
+        # these when you present the lists."
+        #
+        # No dedupe between the lists: bucket_of() returns exactly one bucket
+        # per posting, so the three are disjoint by construction. The old
+        # track-based routing needed a `shown` id filter because a both-tracks
+        # posting appeared in each; an overlap posting now appears only under
+        # overlap.
+        sections: list[tuple[str, list, list]] = []
+        for bucket in config.BUCKETS:
+            bar = (args.threshold if args.threshold is not None
+                   else config.bucket_threshold(bucket))
+            rows = store.presentable(conn, bar, bucket=bucket)[:limit]
+            # The near-miss floor is RELATIVE to this bucket's bar. A fixed 3.7
+            # floor against the 3.75 overlap bar leaves a 0.05-wide band, which
+            # would silently stop showing him near-misses in his best bucket.
+            near_floor = max(0.0, bar - floor_gap)
+            shown_ids = {r["id"] for r in rows}
+            worth = [r for r in store.worth_knowing(
+                conn, bar, near_floor, cap, bucket=bucket)
+                if r["id"] not in shown_ids]
+            sections.append((bucket, rows, worth))
 
-        # List 2: the growth-marketing backup track, deduped against list 1.
-        growth_cfg = config.scoring(config.TRACK_GROWTH)
-        growth_limit = int(growth_cfg.get("max_results", 5))
-        growth_threshold = float(growth_cfg.get("pass_threshold", threshold))
-        shown = {row["id"] for row in matches}
-        backup = [r for r in store.presentable(conn, growth_threshold,
-                                               track=config.TRACK_GROWTH)
-                  if r["id"] not in shown][:growth_limit]
+        matches = [r for _b, rows, _w in sections for r in rows]
 
         near = []
         if args.companies:
             names = [c.strip() for c in args.companies.split(",") if c.strip()]
-            shown = {row["company"].lower() for row in matches}
-            near = [r for r in store.near_misses(conn, threshold, names)
-                    if r["company"].lower() not in shown]
-
-        # Anything just under the bar gets a one-line mention rather than being
-        # silently dropped -- Doran asked explicitly not to have near-misses
-        # hidden from him. Computed per track: a single shared pool let the
-        # generally-higher-scoring growth track fill the whole cap and
-        # silently crowd out ai_enablement near-misses.
-        review = config.profile().get("review", {})
-        floor = float(review.get("worth_knowing_floor", 3.7))
-        cap = int(review.get("max_worth_knowing", 3))
-        shown_ids = {row["id"] for row in matches}
-        backup_shown_ids = shown_ids | {row["id"] for row in backup}
-
-        worth_ai = [r for r in store.worth_knowing(
-            conn, threshold, floor, cap, track=config.TRACK_AI)
-            if r["id"] not in shown_ids]
-        worth_growth = [r for r in store.worth_knowing(
-            conn, growth_threshold, floor, cap, track=config.TRACK_GROWTH)
-            if r["id"] not in backup_shown_ids]
+            seen_companies = {row["company"].lower() for row in matches}
+            bar = args.threshold if args.threshold is not None else _threshold()
+            near = [r for r in store.near_misses(conn, bar, names)
+                    if r["company"].lower() not in seen_companies]
 
         # Built as one string, then printed AND archived, so the markdown file
         # is byte-for-byte what Doran saw rather than a second rendering of it.
-        parts = [report.render_list(config.TRACK_AI, matches)]
-        if worth_ai:
-            parts.append(report.render_worth_knowing(worth_ai))
-        parts.append("\n")
-        parts.append(report.render_list(config.TRACK_GROWTH,
-                                         [r for r in backup if r["id"] not in shown_ids]))
-        if worth_growth:
-            parts.append(report.render_worth_knowing(worth_growth))
+        # Companies he already has an application in at, read once and passed to
+        # every list so the note appears wherever the company does.
+        prior = store.prior_applications(conn)
+        parts: list[str] = []
+        for bucket, rows, worth in sections:
+            bar = (args.threshold if args.threshold is not None
+                   else config.bucket_threshold(bucket))
+            parts.append(report.render_bucket(bucket, bar, rows, prior))
+            if worth:
+                parts.append(report.render_worth_knowing(worth, bar))
+            parts.append("\n")
 
         if near:
             parts.append(report.render_near_misses(near))
@@ -391,8 +439,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             )
             print(f"\n[detail: {path}]")
 
-        if (matches or backup) and not args.no_mark:
-            ids = [row["id"] for row in matches] + [row["id"] for row in backup]
+        # `matches` already spans all three buckets, which are disjoint, so there
+        # is no second list to append. Before the buckets landed this read
+        # `matches + backup`; `backup` no longer exists and the stale reference
+        # raised NameError here AFTER the report had printed and archived, so a
+        # run looked successful while marking nothing as presented.
+        if matches and not args.no_mark:
+            ids = [row["id"] for row in matches]
             store.mark_presented(conn, ids, run_id)
             print(f"[{len(ids)} posting(s) across both lists marked as presented - "
                   "they will never appear in a scan again]")
@@ -643,6 +696,16 @@ def cmd_prefilter_pending(args: argparse.Namespace) -> int:
             if result.passed:
                 store.set_state(conn, row["id"], STATE_PREFILTERED,
                                 f"relevance {result.relevance:.1f}")
+                # Persist the tracks, exactly as pipeline.py does. Without this
+                # the whole ingest and browser-board path landed with tracks=''
+                # and every such posting fell into the AI bucket by default --
+                # which mattered the moment buckets became load-bearing.
+                conn.execute(
+                    "UPDATE postings SET tracks = ?, audience = ?, "
+                    "ai_fluency_requested = ? WHERE id = ?",
+                    (",".join(result.tracks), result.audience,
+                     int(result.ai_fluency_requested), row["id"]),
+                )
                 kept += 1
             else:
                 store.set_state(conn, row["id"], STATE_REJECTED_PREFILTER, result.reason)
@@ -668,10 +731,193 @@ def cmd_refresh_tokens(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tiebreak(args: argparse.Namespace) -> int:
+    """List the close calls a holistic read is allowed to touch.
+
+    Python's whole job here is picking who is eligible. It writes a worksheet of
+    postings sitting within the close-call band of their own bucket's bar, with
+    the full posting body attached, and a template to answer in. The reading and
+    the judgement are Claude's; `record-tiebreak` audits what comes back.
+    """
+    from careerops import tiebreak as tb
+
+    with store.connect() as conn:
+        # --limit may only tighten the cap, never raise it.
+        limit = min(args.limit or tb.MAX_PER_RUN, tb.MAX_PER_RUN)
+        rows = tb.candidates(conn, run_id=args.run, limit=limit)
+        if not rows:
+            scope = f"run {args.run}" if args.run else "the whole database"
+            print(f"No close calls in {scope}. Nothing for the tiebreaker to do.")
+            return 0
+
+        run_dir = config.RUNS_DIR / str(args.run or "all")
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        lines = [
+            f"# Tiebreaker worksheet - {len(rows)} close call(s)",
+            "",
+            f"Every posting here scored within {tb.BAND:.2f} of the bar for its own",
+            f"bucket. Read the FULL posting body below - not the fit summary, not the",
+            "block notes - and decide whether the score reads right against what the",
+            "job actually is.",
+            "",
+            f"- A nudge may be at most {tb.MAX_ADJUSTMENT:+.2f}, in either direction.",
+            f"- It needs {tb.MIN_QUOTES} verbatim quotes of {tb.MIN_QUOTE_CHARS}+ characters "
+            "from the body, checked character by character on the way in.",
+            "- Leaving a posting alone is a valid answer, and is the default.",
+            "",
+            "Answer in `tiebreak.json` beside this file, then apply it with:",
+            "",
+            "```",
+            f"python cli.py record-tiebreak --file {run_dir.as_posix()}/tiebreak.json",
+            "```",
+            "",
+            "---",
+            "",
+        ]
+        template = []
+        for i, row in enumerate(rows, start=1):
+            bucket = config.bucket_of(row["tracks"])
+            bar = config.bucket_threshold(bucket)
+            base = tb.base_score(row)
+            gap = base - bar
+            lines += [
+                f"### {i}. {row['title']} - {row['company']}",
+                "",
+                f"- **posting_id**: `{row['id']}`",
+                f"- **bucket**: {config.bucket_label(bucket)}  |  bar {bar:.2f}",
+                f"- **rubric score**: {base:.2f}  "
+                f"({'clears by' if gap >= 0 else 'misses by'} {abs(gap):.2f})",
+                f"- **URL**: {row['url']}",
+                f"- **Location**: {row['location_raw'] or 'unstated'}"
+                f"  |  work model: {row['work_model'] or 'unknown'}",
+                "",
+                "<details><summary>Full description</summary>",
+                "",
+                "```text",
+                (row["description"] or "").strip(),
+                "```",
+                "",
+                "</details>",
+                "",
+            ]
+            template.append({
+                "posting_id": row["id"],
+                "company": row["company"],
+                "title": row["title"],
+                "adjustment": 0.0,
+                "note": "",
+                "quotes": [],
+            })
+
+        (run_dir / "tiebreak.md").write_text("\n".join(lines), encoding="utf-8")
+        (run_dir / "tiebreak.json").write_text(
+            json.dumps({"tiebreaks": template}, indent=2), encoding="utf-8"
+        )
+    print(f"{len(rows)} close call(s) written to {run_dir / 'tiebreak.md'}")
+    print(f"Answer in {run_dir / 'tiebreak.json'}")
+    return 0
+
+
+def cmd_record_tiebreak(args: argparse.Namespace) -> int:
+    """Apply holistic nudges, refusing every one that breaks the licence.
+
+    This is the audit, and it is the whole reason the tiebreaker is safe to have
+    at all. Nothing is trusted from the file: eligibility is recomputed from the
+    database, the quotes are matched against the stored posting body, and the
+    per-run cap is counted here rather than assumed.
+    """
+    from careerops import tiebreak as tb
+
+    payload = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    items = [i for i in payload.get("tiebreaks", []) if float(i.get("adjustment") or 0)]
+
+    if len(items) > tb.MAX_PER_RUN:
+        print(f"REFUSED: {len(items)} nudges exceeds the {tb.MAX_PER_RUN} per-run cap.")
+        return 1
+
+    applied = 0
+    refused = 0
+    with store.connect() as conn:
+        max_score = float(config.connections().get("max_score", 5.0))
+        for item in items:
+            posting_id = int(item["posting_id"])
+            posting = store.get_posting(conn, posting_id)
+            evaluation = store.latest_evaluation(conn, posting_id)
+            if not posting or not evaluation:
+                print(f"  posting {posting_id}: REFUSED - no evaluation on record")
+                refused += 1
+                continue
+
+            bucket = config.bucket_of(posting["tracks"])
+            base = tb.base_score(evaluation)
+            adjustment = float(item["adjustment"])
+            quotes = [str(q) for q in (item.get("quotes") or [])]
+            problems = tb.validate(
+                adjustment, quotes, posting["description"] or "", base, bucket
+            )
+            if problems:
+                refused += 1
+                print(f"  posting {posting_id} ({posting['company']}): REFUSED")
+                for problem in problems:
+                    print(f"      - {problem}")
+                continue
+
+            final = store.apply_tiebreak(
+                conn, int(evaluation["id"]),
+                base_score=base, adjustment=adjustment,
+                note=str(item.get("note", "")), quotes=quotes,
+                max_score=max_score,
+            )
+            applied += 1
+            bar = config.bucket_threshold(bucket)
+            crossed = (base < bar <= final) or (final < bar <= base)
+            print(f"  posting {posting_id} ({posting['company']}): "
+                  f"{base:.2f} -> {final:.2f} ({adjustment:+.2f})"
+                  + ("  [CROSSES THE BAR]" if crossed else ""))
+
+    print(f"\nApplied {applied} nudge(s), refused {refused}.")
+    return 1 if refused else 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
-    """Regression test the rubric against the five anchors."""
+    """Regression test the rubric against the anchors and the applied-job list."""
+    from careerops import regression
     from careerops.calibrate import run_calibration
-    return run_calibration(check_only=args.check)
+
+    if args.applied_only:
+        return regression.run()
+
+    rc = run_calibration(check_only=args.check)
+
+    # The anchors are scored from documents and never touch the deterministic
+    # gates, so they cannot catch a geography, title-band or comp change that
+    # makes a real job invisible. The applied list can, and it is free to run.
+    if args.check:
+        print()
+        rc = regression.run() or rc
+
+        # Every holistic nudge standing today, listed beside the anchors. The
+        # tiebreaker is the only place a score moves on judgement rather than on
+        # the rubric, so it is the only one that needs re-reading periodically.
+        from careerops import tiebreak as tb
+        with store.connect() as conn:
+            nudges = tb.audit(conn)
+        print()
+        if not nudges:
+            print("Tiebreak audit - no holistic nudges are in force.")
+        else:
+            print(f"Tiebreak audit - {len(nudges)} holistic nudge(s) in force "
+                  f"(each capped at {tb.MAX_ADJUSTMENT:+.2f}):")
+            for row in nudges:
+                bucket = config.bucket_of(row["tracks"])
+                adjustment = float(row["tiebreak_adjustment"])
+                base = float(row["weighted_score"]) - adjustment
+                print(f"  {base:.2f} {adjustment:+.2f} -> {row['weighted_score']:.2f}  "
+                      f"[{bucket}]  {row['company'][:22]} - {row['title'][:40]}")
+                if row["tiebreak_note"]:
+                    print(f"        {row['tiebreak_note'][:100]}")
+    return rc
 
 
 def cmd_add_rule(args: argparse.Namespace) -> int:
@@ -735,6 +981,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="which list these scores belong to (default: ai_enablement)")
     p.set_defaults(func=cmd_record_eval)
 
+    p = sub.add_parser("tiebreak", help="worksheet of close calls for a holistic read")
+    p.add_argument("--run", type=int)
+    p.add_argument("--limit", type=int, default=None,
+                   help="cap the worksheet (never above the built-in per-run cap)")
+    p.set_defaults(func=cmd_tiebreak)
+
+    p = sub.add_parser("record-tiebreak", help="apply audited holistic nudges")
+    p.add_argument("--file", required=True)
+    p.set_defaults(func=cmd_record_tiebreak)
+
     p = sub.add_parser("report", help="render the six-field match list")
     p.add_argument("--threshold", type=float)
     p.add_argument("--companies", help="add near-miss lines for these companies")
@@ -778,7 +1034,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("calibrate", help="regression test the rubric")
     p.add_argument("--check", action="store_true",
-                   help="verify recorded scores without re-queuing")
+                   help="verify recorded scores without re-queuing, then run the "
+                        "applied-job regression check")
+    p.add_argument("--applied-only", action="store_true",
+                   help="skip the anchors and only check that every job you "
+                        "applied to would still get through the gates and clear "
+                        "the bar")
     p.set_defaults(func=cmd_calibrate)
 
     p = sub.add_parser(

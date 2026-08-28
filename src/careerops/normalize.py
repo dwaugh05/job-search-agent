@@ -116,6 +116,10 @@ _REMOTE_PAT = re.compile(
 _HYBRID_PAT = re.compile(r"\bhybrid\b", re.IGNORECASE)
 _ONSITE_PAT = re.compile(r"\b(on.?site|in.?office|in.?person)\b", re.IGNORECASE)
 
+# LinkedIn syndication tag, set by the employer: #LI-Hybrid, #LI-Remote,
+# #LI-Onsite. Often the only work-model statement in the body.
+_LI_WORK_TAG = re.compile(r"#LI-(Hybrid|Remote|Onsite|On-?site)\b", re.IGNORECASE)
+
 # A leading work-model token followed by a separator, e.g. "Remote - Austin".
 _WORK_PREFIX = re.compile(
     r"^(remote|hybrid|on.?site|in.?office|flexible)\s*(?:[-–—:|]|\bin\b)\s*",
@@ -184,6 +188,34 @@ _COUNTRY_CODES = {
     "IT": "Italy", "SE": "Sweden", "AE": "United Arab Emirates",
 }
 
+# Country tokens that may lead a location string, e.g. Sony's
+# "United States, San Mateo, CA" or Gilead's
+# "United States - California - Foster City".
+#
+# parse_location reads the country off the TAIL and takes the HEAD as the city,
+# so a country-first employer had its city recorded as "United States" -- which
+# matches nothing in commute.yml and rejected the posting as "unknown location".
+# Measured 2026-08-28: 141 postings country-first with a real city, 139 of them
+# Sony, 80 of those five minutes from home.
+#
+# DELIBERATELY US MARKERS ONLY. Do NOT complete this from _COUNTRY_CODES or an
+# ISO table: that maps CA to Canada and IL to Israel, which would eat California
+# and Illinois out of "CA, San Francisco" and "IL, Chicago".
+_LEADING_COUNTRY = frozenset({
+    "united states", "united states of america", "usa", "us", "u.s.", "u.s.a.",
+})
+
+# A city field holding nothing but a country name is not a location. Feeds write
+# "Remote - USA" and the work-model prefix strips to a bare "USA"; "US / Canada"
+# leaves "Canada". Neither is a place a commute can be computed from.
+#
+# City-states are exempt because there the country name IS the city.
+_CITY_STATES = frozenset({"singapore", "hong kong", "monaco", "luxembourg"})
+_BARE_COUNTRY = frozenset(
+    {n.lower() for n in _COUNTRY_CODES.values()}
+    | {"united states of america", "usa", "us", "u.s.", "u.s.a.", "uk", "u.k."}
+) - _CITY_STATES
+
 # Cities that ATS feeds spell inconsistently.
 _CITY_ALIASES = {
     "sf": "San Francisco",
@@ -194,6 +226,16 @@ _CITY_ALIASES = {
     "mtv": "Mountain View",
     "redwood shores": "Redwood City",
 }
+
+
+def _country_name(token: str) -> str:
+    """Canonical country name for a bare country token."""
+    key = token.strip().lower()
+    if key in _LEADING_COUNTRY:
+        return "United States"
+    if key in {"uk", "u.k."}:
+        return "United Kingdom"
+    return _COUNTRY_CODES.get(token.strip().upper(), token.strip())
 
 
 def parse_location(raw: str | None) -> tuple[str | None, str | None, str | None]:
@@ -224,6 +266,13 @@ def parse_location(raw: str | None) -> tuple[str | None, str | None, str | None]
             text = ", ".join(pieces)
 
     text = re.sub(r"[|/]", ",", text)
+
+    # "United States - California - Foster City" (Gilead). Only rewritten
+    # when the string LEADS with a country marker, so "Remote - Austin, TX"
+    # and "Hybrid: San Francisco" are untouched.
+    if re.match(r"^\s*(united states(?: of america)?|usa|us|u\.s\.a?\.?)\s+-\s+",
+                text, re.IGNORECASE):
+        text = re.sub(r"\s+-\s+", ", ", text)
     parts = [p.strip(" -–—\t") for p in text.split(",")]
     parts = [p for p in parts if p]
     if not parts:
@@ -253,6 +302,25 @@ def parse_location(raw: str | None) -> tuple[str | None, str | None, str | None]
             country = country or "United States"
             parts = parts[:-1]
 
+    # Country-first employers put the country where the city belongs.
+    # Stripped only when something follows it, so a bare "United States"
+    # still yields no city rather than borrowing the next field.
+    if len(parts) > 1 and parts[0].strip().lower() in _LEADING_COUNTRY:
+        country = country or "United States"
+        parts = parts[1:]
+        # Country-first strings run country, region, city -- so once the
+        # country is gone the STATE is at the head, not the tail where the
+        # block above looked for it. "US, CA, Santa Clara" and
+        # "United States - California - Foster City" both land here.
+        #
+        # Gated behind a confirmed country strip on purpose: run
+        # unconditionally it would eat the city out of "Oregon, WI".
+        if len(parts) > 1:
+            head_region = parts[0].strip().lower()
+            if head_region in _STATE_ABBR:
+                region = region or _STATE_ABBR[head_region]
+                parts = parts[1:]
+
     city = None
     if parts:
         candidate = parts[0].strip()
@@ -267,6 +335,15 @@ def parse_location(raw: str | None) -> tuple[str | None, str | None, str | None]
         if candidate:
             city = _CITY_ALIASES.get(candidate.lower(), candidate.title()
                                      if candidate.islower() else candidate)
+
+    # A country name alone is an eligibility note, not a place.
+    # "Remote - USA" strips its work-model prefix down to a bare "USA";
+    # "US / Canada" leaves "Canada". Neither can produce a commute, and
+    # storing one puts a country in the city column.
+    if city and city.strip().lower() in _BARE_COUNTRY:
+        country = country or _country_name(city)
+        city = None
+
     return city or None, region, country
 
 
@@ -324,6 +401,24 @@ def parse_work_model(
             return WORK_REMOTE
         if any(k in explicit for k in ("onsite", "on-site", "on site", "office")):
             return WORK_ONSITE
+
+    # The #LI-Hybrid / #LI-Remote / #LI-Onsite tag is set by the employer for
+    # LinkedIn syndication, so it is a stated fact rather than prose to infer
+    # from -- and it is often the ONLY work-model signal in the body.
+    #
+    # NVIDIA's "Director, AI Enablement" carries #LI-Hybrid and nothing else;
+    # without this it resolved to On-site, which costs a role three full points
+    # on dimension 6 and misreads a three-day commute as a five-day one.
+    # Checked before the location and prose heuristics because those are
+    # guesses and this is not.
+    tag = _LI_WORK_TAG.search(description or "")
+    if tag:
+        kind = tag.group(1).lower()
+        if kind == "hybrid":
+            return WORK_HYBRID
+        if kind == "remote":
+            return WORK_REMOTE
+        return WORK_ONSITE
 
     location = clean(location_raw)
 

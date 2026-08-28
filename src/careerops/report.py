@@ -14,6 +14,7 @@ Two artifacts, deliberately different:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -124,7 +125,111 @@ def _connection_field(row: sqlite3.Row) -> str | None:
             f"score includes a +{bonus:.1f} bump for the warm intro")
 
 
-def render_matches(rows: list[sqlite3.Row]) -> str:
+def _tiebreak_field(row: sqlite3.Row) -> str | None:
+    """Say out loud that a close call was settled by a holistic read.
+
+    Same reasoning as the connection bump: an adjustment Doran cannot see is an
+    adjustment he cannot argue with. A nudge is the one score movement in this
+    system that came from judgement rather than from the rubric, so it is the
+    one that most needs to be visible and challengeable.
+    """
+    try:
+        adjustment = float(row["tiebreak_adjustment"] or 0)
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+    if not adjustment:
+        return None
+    try:
+        note = str(row["tiebreak_note"] or "").strip()
+    except (IndexError, KeyError):
+        note = ""
+    line = (f"Tiebreak: this was a close call and I moved it {adjustment:+.2f} "
+            "after reading the full posting")
+    return f"{line} - {note}" if note else line
+
+
+def _named_stack(row: sqlite3.Row) -> str | None:
+    """Third-party platforms an anonymized posting names, as an identity clue.
+
+    Doran asked on 2026-08-26 for a way to sanity-check who is really hiring
+    behind a reseller listing. Searching the web for a matching posting was the
+    obvious idea and does not work: the reseller rewrites the text, its own site
+    refuses scripted requests, and a title search on the live boards returns
+    nothing. What the posting cannot hide is the stack it expects you to work in.
+    "Salesforce, Seismic, Gong, Snowflake, Slack" alongside "seller feedback" is
+    a sales-tech company and narrows the field a long way.
+
+    Only shown on reseller listings -- on a named employer it is noise.
+    """
+    if not is_aggregator(row):
+        return None
+    listed = (config.profile().get("discovery") or {}).get("stack_tells") or []
+    if not listed:
+        return None
+    import re as _re
+
+    body = row["description"] or ""
+    pattern = _re.compile(
+        r"\b(" + "|".join(_re.escape(str(t)) for t in listed) + r")\b", _re.IGNORECASE
+    )
+    seen: dict[str, str] = {}
+    for match in pattern.finditer(body):
+        seen.setdefault(match.group(1).lower(), match.group(1))
+    if len(seen) < 3:
+        # One or two generic tools say nothing. Three is a stack.
+        return None
+    names = sorted(seen.values(), key=str.lower)
+    return ("Stack named in the posting: " + ", ".join(names)
+            + " - use this to work out who is actually hiring")
+
+
+def _also_hiring_field(row: sqlite3.Row, rows: list[sqlite3.Row]) -> str | None:
+    """Name the company's OTHER roles in this same report.
+
+    Doran, 2026-08-26: "I might just read through the list sequentially and apply
+    to the first one I see and not even take a chance to apply to the second one
+    when it might have better fit." Three Coupa roles in one report is exactly
+    that trap -- the second and third are easy to miss.
+    """
+    from .fingerprint import normalize_company
+
+    me = normalize_company(row["company"])
+    siblings = [
+        other["title"] for other in rows
+        if other["id"] != row["id"] and normalize_company(other["company"]) == me
+    ]
+    if not siblings:
+        return None
+    listed = "; ".join(f'"{title}"' for title in siblings)
+    return (f"Also in this report from {row['company']}: {listed} "
+            f"- read {'both' if len(siblings) == 1 else 'all'} before applying")
+
+
+def _already_applied_field(row: sqlite3.Row,
+                           prior: dict[str, list[tuple[str, str]]] | None) -> str | None:
+    """Say when Doran already has an application in at this employer.
+
+    Asked for on 2026-08-26: knowing there is an existing application, and which
+    role it was, changes how he reads a new posting from the same company.
+    """
+    if not prior:
+        return None
+    from .fingerprint import normalize_company
+
+    history = prior.get(normalize_company(row["company"]))
+    if not history:
+        return None
+    # Never flag the posting against itself.
+    others = [(when, title) for when, title in history if title != row["title"]]
+    if not others:
+        return None
+    listed = "; ".join(f'"{title}" on {when}' for when, title in others[:3])
+    more = f" (+{len(others) - 3} more)" if len(others) > 3 else ""
+    return f"Already applied at {row['company']}: {listed}{more}"
+
+
+def render_matches(rows: list[sqlite3.Row],
+                   prior_applications: dict | None = None) -> str:
     """The match list Doran reads.
 
     Eight fields, plus a ninth on hybrid and on-site roles only: the estimated
@@ -134,7 +239,7 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
     2026-08-25: a list of ten roles with no employer names cannot be skimmed.
     """
     if not rows:
-        return "No postings scored 4.0 or higher this run."
+        return "No postings cleared the bar this run."
 
     blocks = []
     for row in rows:
@@ -156,6 +261,21 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
         connection_line = _connection_field(row)
         if connection_line:
             block.append(connection_line)
+        tiebreak_line = _tiebreak_field(row)
+        if tiebreak_line:
+            block.append(tiebreak_line)
+        # Both of these sit right under the Fit Summary on purpose: they change
+        # what he does next, so they must not be below the warning line where a
+        # long summary would push them out of sight.
+        siblings = _also_hiring_field(row, rows)
+        if siblings:
+            block.append(siblings)
+        applied_line = _already_applied_field(row, prior_applications)
+        if applied_line:
+            block.append(applied_line)
+        stack_line = _named_stack(row)
+        if stack_line:
+            block.append(stack_line)
         if row["block_g_verdict"] == "FLAG":
             flags = _flags(row)
             block.append(
@@ -166,47 +286,124 @@ def render_matches(rows: list[sqlite3.Row]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-LIST_HEADERS = {
-    "ai_enablement": (
-        "LIST 1 - AI ENABLEMENT",
-        "The primary target: owning AI enablement for a marketing, GTM or business org.",
+BUCKET_HEADERS = {
+    config.BUCKET_OVERLAP: (
+        "LIST 1 - AI + MARKETING",
+        "The sweet spot: an AI mandate inside a marketing or GTM org. Doran's "
+        "proof points apply directly here, so this list has the most lenient bar.",
     ),
-    "growth_marketing": (
-        "LIST 2 - GROWTH MARKETING (backup)",
-        "Scored on the pre-AI background: SaaS acquisition, CRO, demand gen, web funnel. "
-        "Same 4.0 bar - a backup still has to be worth an application.",
+    config.BUCKET_AI: (
+        "LIST 2 - AI ENABLEMENT",
+        "AI enablement, strategy or builder capacity, wherever it sits. A little "
+        "more lenient than the marketing bar.",
+    ),
+    config.BUCKET_MARKETING: (
+        "LIST 3 - MARKETING",
+        "Traditional growth, brand and web marketing with no AI mandate. Doran: "
+        "\"I'm less interested in a pure traditional marketing role, however that "
+        "doesn't mean I don't want it presented to me if it's a strong fit.\" "
+        "Normal bar, no leniency.",
     ),
 }
 
+# Kept for the archived run report, which still labels by track.
+# --------------------------------------------------- Fit Summary quality gate
+#
+# The Fit Summary exists so Doran does not have to read the posting. Doran,
+# 2026-08-28: "the ultimate goal in writing this summary is really so that I
+# don't need to read the entire job posting, so it's good to quote some
+# sentences verbatim from the posting as evidence citations about the fit."
+#
+# The house style was written down in rubric/rubric-A-G.md and then drifted
+# anyway, because prose guidance is not checkable. Run 25 produced summaries as
+# thin as "Strong pay and a well-resourced team." with no quoted evidence at
+# all, against run 14 summaries that quoted the posting twice and named the
+# proof points. So the format is now checked mechanically, the same way the
+# evidence cap checks block notes.
+#
+# This WARNS rather than blocks. A thin summary is a quality problem, not a
+# correctness one, and refusing to record it would lose the score with it.
 
-def render_list(track: str, rows: list[sqlite3.Row]) -> str:
-    """One titled list. Both tracks use the identical eight-field format."""
-    title, blurb = LIST_HEADERS.get(track, (track.upper(), ""))
+_SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+# Straight and curly pairs both count as a citation.
+_QUOTED = re.compile(r'"[^"]{12,}"|“[^”]{12,}”')
+
+FIT_SUMMARY_MIN_QUOTES = 2
+FIT_SUMMARY_MAX_SENTENCES = 6
+FIT_SUMMARY_MIN_CHARS = 320
+
+
+def fit_summary_issues(text: str | None) -> list[str]:
+    """What is wrong with this Fit Summary, in plain terms. Empty list = fine."""
+    body = (text or "").strip()
+    problems: list[str] = []
+    if not body:
+        return ["no fit summary written"]
+
+    paragraphs = [p for p in re.split(r"\n\s*\n", body) if p.strip()]
+    if len(paragraphs) != 2:
+        problems.append(
+            f"{len(paragraphs)} paragraph(s), needs exactly 2 "
+            "(what the role asks for, then how it fits him)")
+
+    quotes = _QUOTED.findall(body)
+    if len(quotes) < FIT_SUMMARY_MIN_QUOTES:
+        problems.append(
+            f"{len(quotes)} verbatim quote(s) from the posting, needs at least "
+            f"{FIT_SUMMARY_MIN_QUOTES} - he reads this INSTEAD of the posting")
+
+    sentences = len(_SENTENCE_END.findall(body))
+    if sentences > FIT_SUMMARY_MAX_SENTENCES:
+        problems.append(
+            f"{sentences} sentences, cap is {FIT_SUMMARY_MAX_SENTENCES}")
+
+    if len(body) < FIT_SUMMARY_MIN_CHARS:
+        problems.append(
+            f"{len(body)} characters, too thin to replace reading the posting")
+    return problems
+
+
+LIST_HEADERS = {
+    "ai_enablement": ("LIST 1 - AI ENABLEMENT", ""),
+    "growth_marketing": ("LIST 2 - GROWTH MARKETING (backup)", ""),
+}
+
+
+def render_bucket(bucket: str, bar: float, rows: list[sqlite3.Row],
+                  prior_applications: dict | None = None) -> str:
+    """One titled bucket list, stating the bar it was judged against.
+
+    The bar is passed in rather than hardcoded: the three buckets have three
+    different ones, and a header that says "4.0" under a list gated at 3.75 is
+    simply a lie.
+    """
+    title, blurb = BUCKET_HEADERS.get(
+        bucket, (config.bucket_label(bucket), ""))
+    title = f"{title}  (bar {bar:.2f})"
     rule = "=" * max(len(title), 44)
     head = [rule, title, rule, ""]
     if blurb:
         head += [blurb, ""]
     if not rows:
-        head.append("Nothing scored 4.0 or higher this run.")
+        head.append(f"Nothing scored {bar:.2f} or higher this run.")
         return "\n".join(head)
-    return "\n".join(head) + render_matches(rows)
+    return "\n".join(head) + render_matches(rows, prior_applications)
 
 
-def render_both_lists(primary: list[sqlite3.Row],
-                      backup: list[sqlite3.Row]) -> str:
-    """Both lists in one report.
-
-    A posting that qualifies for both tracks appears ONLY in list 1 -- deduped by
-    posting id before rendering, so list 2 stays genuinely a set of alternatives
-    rather than a restatement of the same roles.
-    """
-    shown = {row["id"] for row in primary}
-    backup = [row for row in backup if row["id"] not in shown]
-    return (render_list("ai_enablement", primary) + "\n\n\n"
-            + render_list("growth_marketing", backup))
+def render_list(track: str, rows: list[sqlite3.Row],
+                prior_applications: dict | None = None) -> str:
+    """Legacy track-titled list, still used by the archived run report."""
+    title, _blurb = LIST_HEADERS.get(track, (track.upper(), ""))
+    rule = "=" * max(len(title), 44)
+    head = [rule, title, rule, ""]
+    if not rows:
+        head.append("Nothing cleared the bar this run.")
+        return "\n".join(head)
+    return "\n".join(head) + render_matches(rows, prior_applications)
 
 
-def render_worth_knowing(rows: list[sqlite3.Row]) -> str:
+def render_worth_knowing(rows: list[sqlite3.Row],
+                         bar: float = 4.0) -> str:
     """Sub-threshold roles that still deserve a mention, one line each.
 
     Doran, on a role that scored just under the bar: "I still would want to see
@@ -219,7 +416,7 @@ def render_worth_knowing(rows: list[sqlite3.Row]) -> str:
     """
     if not rows:
         return ""
-    lines = ["", "Worth knowing about (scored just under 4.0 - not recommendations):"]
+    lines = ["", f"Worth knowing about (scored just under {bar:.2f} - not recommendations):"]
     for row in rows:
         model = row["work_model"] or "?"
         if row["work_model"] != WORK_REMOTE:

@@ -69,6 +69,32 @@ _RANGE_PAT = re.compile(
 )
 _SINGLE_PAT = re.compile(_MONEY)
 
+# Some employers put the currency AFTER the figure and drop the dollar sign
+# entirely: NVIDIA writes "The base salary range is 292,000 USD - 442,750 USD".
+# The $-anchored pattern above cannot see that at all, so every posting on that
+# board came through with no salary and scored its compensation dimension as
+# unpublished. Kept as a separate FALLBACK rather than folded into _MONEY: a
+# bare comma-grouped number with no currency marker at all matches headcounts,
+# ARR and funding totals, and the $-anchored path is what the calibration
+# anchors are pinned to.
+_MONEY_TRAILING = r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmM])?\s*(?:USD|usd)"
+_RANGE_TRAILING_PAT = re.compile(
+    _MONEY_TRAILING + r"\s*(?:-|--|to|through|–|—|and)\s*" + _MONEY_TRAILING
+)
+
+# The same shape, but with the currency named ONCE at the end of the range:
+# LinkedIn writes "The pay range for this role is: 105,000 - 175,000 USD per
+# year". Requiring USD after both figures missed every posting written this way.
+#
+# The bare comma-grouped numbers here would also match headcounts and funding
+# totals, so this pattern demands the trailing currency marker AND salary
+# language nearby -- checked by the caller, not by the regex.
+_MONEY_BARE = r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*([kKmM])?"
+_RANGE_TRAILING_ONCE_PAT = re.compile(
+    _MONEY_BARE + r"\s*(?:-|--|to|through|–|—|and)\s*" + _MONEY_BARE
+    + r"\s*(?:USD|usd|per year|/\s*yr|annually)"
+)
+
 # Prose that signals the number nearby is actually a salary, not ARR or funding.
 _SALARY_CONTEXT = re.compile(
     r"(salary|base pay|base compensation|pay range|compensation range|"
@@ -156,6 +182,28 @@ def parse_salary(text: str | None) -> tuple[int | None, int | None]:
         non_low = [c for c in candidates if c[2] != "low"]
         best = (non_low or candidates)[0]
         return best[0], best[1]
+
+    # No $-anchored range. Try the trailing-currency form ("292,000 USD -
+    # 442,750 USD") before giving up on a range altogether.
+    for match in _RANGE_TRAILING_PAT.finditer(raw):
+        hourly = _is_hourly(match.start(), match.end())
+        low = _to_number(match.group(1), match.group(2), hourly=hourly)
+        high = _to_number(match.group(3), match.group(4), hourly=hourly)
+        if _plausible(low) and _plausible(high) and high >= low:
+            return int(low), int(high)
+
+    # Currency named once, after the range. Requires salary language in the
+    # surrounding window so a bare "10,000 - 20,000 USD" of ARR or headcount
+    # cannot be read as pay.
+    for match in _RANGE_TRAILING_ONCE_PAT.finditer(raw):
+        window = raw[max(0, match.start() - 90):match.end() + 30]
+        if not _SALARY_CONTEXT.search(window):
+            continue
+        hourly = _is_hourly(match.start(), match.end())
+        low = _to_number(match.group(1), match.group(2), hourly=hourly)
+        high = _to_number(match.group(3), match.group(4), hourly=hourly)
+        if _plausible(low) and _plausible(high) and high >= low:
+            return int(low), int(high)
 
     # No range -- fall back to a single figure, but only near salary language,
     # otherwise "$50M Series C" gets read as a paycheck.

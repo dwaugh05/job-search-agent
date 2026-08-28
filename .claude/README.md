@@ -25,7 +25,7 @@ are repairing state, debugging, or a workflow explicitly tells you to.
 | `/scan-companies "Anthropic, Figma"` | Same pipeline, different candidate set — only the companies named. Skips the freshness window by default, and adds near-miss lines for any named company that came up dry. |
 | `/feedback` | Takes two independent kinds of feedback: application intent (`verdict`) and scoring quality (`add-rule`). Explains itself and displays the ten-lever phrasebook on every run. Never asks Doran for a numeric score. |
 | `/shortlist` | Read-only. The interested/saved/applied pipeline, plus anything still awaiting a verdict, plus a DB health check. |
-| `/calibrate` | Re-scores the five anchor postings blind against the current rubric and checks each lands in its band. Run after any rubric or weight change. |
+| `/calibrate` | Two regression tests. Re-scores the anchor postings blind and checks each lands in its band, **and** confirms every job Doran has applied to still gets through the gates and still clears 4.0. Run after any change to the rubric, the weights, the gates, or `config/profile.yml`. |
 
 ---
 
@@ -102,6 +102,8 @@ Four things `scan` does that the funnel counts name but do not explain
 | Command | What it does |
 | --- | --- |
 | `python cli.py record-eval --file scores.json` | Writes A-G dimension scores back to SQLite. Applies the evidence cap, redistributes weight for null dimensions, applies scope/bonus modifiers, adds the connection bump, clamps to 5.0, then stores the weighted score. |
+| `python cli.py tiebreak --run N` | Writes a worksheet of close calls — postings within 0.20 of the bar for their own bucket — with the **full** posting body attached. Read-only; changes nothing. |
+| `python cli.py record-tiebreak --file tiebreak.json` | Applies holistic nudges, refusing every one that breaks the licence below. |
 | `python cli.py report` | Renders the eight-field match list (Company first), the growth-marketing backup list, and the "Worth knowing about" tier. Adds an **Estimated Commute** line to hybrid and on-site postings, and archives the printed output verbatim to `data/reports/results-YYYY-MM-DD_HHMM.md`. |
 
 `record-eval` flags: `--run N` tags the evaluations to a run,
@@ -130,6 +132,47 @@ Five behaviours in `record-eval` that are easy to trip over:
   handled without it becoming a hidden penalty.
 - **Missing dimensions skip the posting.** Every dimension must be present as a
   number or an explicit `null`, or the whole evaluation is dropped with a warning.
+
+### The tiebreaker — when it runs, and what it may do
+
+Doran's idea, 2026-08-28: a safety net that "reads the posting itself to
+understand what it's about and then decides things that are close call,
+tiebreaker type things", with "the if-then scenario of where and when to use the
+agent" fixed in advance. This is that if-then. It is enforced in
+`src/careerops/tiebreak.py`, not trusted to a prompt, because the rules in this
+repo that stuck are the mechanical ones.
+
+**When it runs.** Between `record-eval` and `report`, and only then. It is
+optional — skipping it is always valid, and most runs will not need it.
+
+**Who is eligible.** A posting whose *rubric* score lands within **0.20** of the
+bar for its own bucket. Nothing outside that window can be nudged, and a posting
+already carrying a nudge is re-judged on its rubric score, so nudges cannot
+compound across runs.
+
+**What a nudge may do.** At most **±0.15**, deliberately smaller than the 0.20
+band: a tiebreaker may move a posting across the bar, but can never move one
+from clearly-in to clearly-out or the reverse. It leans; it does not decide.
+
+**What it must show.** Two verbatim quotes of 25+ characters from the posting
+body, matched against the stored description character by character (whitespace
+normalized, so re-wrapping is fine). A judgement that cannot be quoted is the
+unfalsifiable "vibe" this whole design exists to prevent.
+
+**How much.** 30 postings per run, maximum. `--limit` can only tighten that.
+
+**Where it shows up.** In `evaluations.tiebreak_adjustment` / `tiebreak_note` /
+`tiebreak_quotes`, never smeared into the rubric score, so it can be read back
+and unwound. The report prints a `Tiebreak:` line, `calibrate --check` lists
+every nudge in force, and the applied-job regression check deliberately reads
+the score with the nudge *removed* — otherwise a nudge could hide the rubric
+drift that check exists to catch.
+
+```
+python cli.py tiebreak --run <run_id>       # worksheet + template, changes nothing
+# read data/runs/<run_id>/tiebreak.md, answer in tiebreak.json
+python cli.py record-tiebreak --file data/runs/<run_id>/tiebreak.json
+```
 
 `report` flags: `--threshold N` overrides the 4.0 bar, `--companies "A,B"` adds
 near-miss lines for those companies, `--run N` tags the written report file,
@@ -174,9 +217,26 @@ python -c "import sys; sys.path.insert(0,'src'); from careerops import store; \
 | `python cli.py status` | Database summary: totals, run count, learned rules, breakdown by state. |
 | `python cli.py add-rule "<rule>" --dimension <n>` | Appends a durable learned rule to `rubric/learned-rules.md` and the DB. |
 | `python cli.py calibrate` | Builds `data/calibration-queue.md` with all five anchors for blind scoring. |
-| `python cli.py calibrate --check` | Verifies already-recorded anchor scores against their bands without re-queuing. |
+| `python cli.py calibrate --check` | Verifies recorded anchor scores against their bands, **then** runs the applied-job regression check. |
+| `python cli.py calibrate --applied-only` | Just the applied-job check: re-runs the deterministic gates over every job Doran applied to and confirms each still reaches scoring and still clears 4.0. Exits non-zero on a regression. Reach for this after touching a gate, `config/profile.yml`, or `src/careerops/prefilter.py` — the anchors are scored from documents and cannot catch those. |
 
 Never mark a posting `applied` unless Doran says he applied.
+
+**Accepted misses: `regression_exemptions` in `config/profile.yml`.** The applied-job
+check exits non-zero so it can gate a change, which is only useful while a red line
+still means something. A posting listed there is reported every run as `KNOWN`
+rather than `BLOCKED`, with its reason printed underneath, and does not fail the
+check. Two guardrails: an exemption is ignored unless the posting actually fails a
+gate, so a stale entry can never silence a break that appears later; and the summary
+says "21 of 22 clear the gates, and the other 1 is an accepted miss" rather than
+claiming a clean sweep.
+
+Add an entry only after the miss has been diagnosed and consciously accepted, never
+to turn a red check green. The one entry as of 2026-08-28 is Google's "Program
+Manager, AI and Gemini App Marketing": Google posted the same job at two levels, the
+5-year req Doran applied to scores 34.0 because its description omits "agentic" and
+"AI agent", and its 3-year twin scores 48.5 and passes — so a scan surfaces the role
+through the other advert.
 
 ### The application archive
 
@@ -206,6 +266,7 @@ The snapshot is taken at verdict time on purpose — `upsert_posting` overwrites
 python cli.py scan
 # read data/runs/<run_id>/queue.md, score it, write scores.json
 python cli.py record-eval --run <run_id> --file data/runs/<run_id>/scores.json
+python cli.py tiebreak --run <run_id>       # optional: close calls only, see above
 python cli.py report --run <run_id>
 ```
 
@@ -214,6 +275,7 @@ python cli.py report --run <run_id>
 ```
 python cli.py scan --companies "Anthropic, Figma"
 python cli.py record-eval --run <run_id> --file data/runs/<run_id>/scores.json
+python cli.py tiebreak --run <run_id>       # optional: close calls only, see above
 python cli.py report --run <run_id> --companies "Anthropic, Figma"
 ```
 
@@ -229,7 +291,7 @@ python cli.py queue
 
 ```
 python cli.py calibrate          # then score the anchors blind
-python cli.py calibrate --check  # every anchor must land in band
+python cli.py calibrate --check  # anchors in band AND applied jobs still visible
 ```
 
 ---

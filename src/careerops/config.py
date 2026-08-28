@@ -55,6 +55,82 @@ def track_label(track: str) -> str:
     return str(scoring(track).get("label", track))
 
 
+# --------------------------------------------------------------- the buckets
+#
+# Doran, 2026-08-28: "I think of your job search workflow as you looking at me
+# for two different roles that I could fit into. If they were overlap then
+# that's great, but each of them separately is also suitable for me too...
+# there's the traditional marketing role and then there's the AI role. And then
+# there's a third bucket of where they overlap. And so I want to know about all
+# three of these when you present the lists."
+#
+# The bucket is derived from postings.tracks, which the prefilter has always
+# computed and persisted and which nothing read until now.
+BUCKET_MARKETING = "marketing_only"
+BUCKET_AI = "ai_only"
+BUCKET_OVERLAP = "overlap"
+BUCKETS = (BUCKET_OVERLAP, BUCKET_AI, BUCKET_MARKETING)
+
+_BUCKET_LABELS = {
+    BUCKET_OVERLAP: "AI + MARKETING",
+    BUCKET_AI: "AI ENABLEMENT",
+    BUCKET_MARKETING: "MARKETING",
+}
+
+# Which rubric a bucket is scored against. An overlap posting is scored on the
+# AI rubric because that is the half with the higher ceiling for Doran; a
+# marketing-only posting MUST use the growth rubric, because scoring.yml
+# dimension 1 (weight 22) makes AI enablement the hard requirement and a pure
+# marketing role cannot mathematically clear the bar under it.
+_BUCKET_RUBRIC = {
+    BUCKET_OVERLAP: TRACK_AI,
+    BUCKET_AI: TRACK_AI,
+    BUCKET_MARKETING: TRACK_GROWTH,
+}
+
+
+def bucket_of(tracks: Any) -> str:
+    """Which of the three buckets a posting belongs to.
+
+    Accepts the comma-joined string stored on postings.tracks, or a list.
+    A posting with no recorded track is treated as AI-only, which is what the
+    system assumed for its whole history before buckets existed.
+    """
+    if isinstance(tracks, str):
+        names = {t.strip() for t in tracks.split(",") if t.strip()}
+    else:
+        names = {str(t).strip() for t in (tracks or []) if str(t).strip()}
+    has_ai = TRACK_AI in names
+    has_growth = TRACK_GROWTH in names
+    if has_ai and has_growth:
+        return BUCKET_OVERLAP
+    if has_growth:
+        return BUCKET_MARKETING
+    return BUCKET_AI
+
+
+def bucket_label(bucket: str) -> str:
+    return _BUCKET_LABELS.get(bucket, bucket.replace("_", " ").upper())
+
+
+def bucket_rubric(bucket: str) -> str:
+    """The track whose rubric this bucket is scored against."""
+    return _BUCKET_RUBRIC.get(bucket, TRACK_AI)
+
+
+def bucket_threshold(bucket: str) -> float:
+    """The presentation bar for one bucket.
+
+    THE LENIENCY IS A BAR, NEVER A SCORE BONUS. That is what keeps the
+    calibration anchors safe: they assert scores against bands, and moving a bar
+    cannot move a score. Adding points instead would have moved every anchor.
+    """
+    review = profile().get("review", {}) or {}
+    bars = review.get("bucket_thresholds", {}) or {}
+    default = float(review.get("min_score_to_present", 4.0))
+    return float(bars.get(bucket, default))
+
+
 @functools.lru_cache(maxsize=None)
 def commute_table() -> dict[str, Any]:
     return _load(CONFIG_DIR / "commute.yml")

@@ -150,6 +150,21 @@ check(
     geo_allowed(None, "On-site", "Offices in San Francisco, Palo Alto and San Mateo", "")[0],
     True,
 )
+
+# Gong's "GTM AI Architect", which Doran applied to on 2026-08-26 and which the
+# scan had rejected. A pipe-separated office list naming San Francisco outright.
+# An earlier version of this check threw the whole string away because "New York"
+# appeared in it -- but a New York office is a different office, not evidence
+# against the San Francisco one. Cities are judged one at a time for this reason.
+MULTI_OFFICE = "Austin | Chicago | New York City | Salt Lake City | San Francisco"
+check("a multi-office list is judged per city, not thrown away wholesale",
+      geo_allowed("Austin", "On-site", MULTI_OFFICE, "")[0], True)
+check("...and resolves to the Bay Area office",
+      [c for c, _ in reachable_cities_in(MULTI_OFFICE)], ["San Francisco"])
+check("a city followed by nothing at all still counts",
+      [c for c, _ in reachable_cities_in("Chicago | San Francisco")], ["San Francisco"])
+check("a city followed by a harmless word still counts",
+      geo_allowed(None, "On-site", "San Francisco or Remote", "")[0], True)
 check(
     "and it still finds the nearest of them",
     reachable_cities_in("Offices in San Francisco, Palo Alto and San Mateo")[0][0],

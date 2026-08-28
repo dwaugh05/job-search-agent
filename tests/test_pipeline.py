@@ -304,6 +304,95 @@ with tempfile.TemporaryDirectory() as tmp:
         store.mark_live_checked(conn, aid, False)
         check("posting marked dead drops out", len(store.presentable(conn, 4.0)), 1)
 
+        # ------------------------------------------------------ three buckets
+        #
+        # Added 2026-08-28. Doran: "there's the traditional marketing role and
+        # then there's the AI role. And then there's a third bucket of where
+        # they overlap. And so I want to know about all three of these when you
+        # present the lists." Each bucket gets its own bar, easiest for overlap.
+        #
+        # The bucket comes from postings.tracks, which the prefilter had always
+        # computed and persisted and which nothing read until now.
+        print("\nthree buckets")
+
+        check("both tracks is the overlap bucket",
+              config.bucket_of("ai_enablement,growth_marketing"),
+              config.BUCKET_OVERLAP)
+        check("AI alone is the AI bucket",
+              config.bucket_of("ai_enablement"), config.BUCKET_AI)
+        check("growth alone is the marketing bucket",
+              config.bucket_of("growth_marketing"), config.BUCKET_MARKETING)
+        check("a list works as well as a string",
+              config.bucket_of(["growth_marketing", "ai_enablement"]),
+              config.BUCKET_OVERLAP)
+        # Every posting scored before buckets existed has tracks='' and was
+        # treated as AI. That must stay true or their history reclassifies.
+        check("no recorded track falls back to AI",
+              config.bucket_of(""), config.BUCKET_AI)
+        check("None falls back to AI", config.bucket_of(None), config.BUCKET_AI)
+
+        # Bars ordered: overlap easiest, marketing hardest -- the 0/+1/+2 scale.
+        overlap_bar = config.bucket_threshold(config.BUCKET_OVERLAP)
+        ai_bar = config.bucket_threshold(config.BUCKET_AI)
+        mkt_bar = config.bucket_threshold(config.BUCKET_MARKETING)
+        check("overlap is the most lenient bar", overlap_bar < ai_bar, True)
+        check("AI sits between the two", ai_bar < mkt_bar, True)
+        check("marketing keeps the normal 4.0 bar", mkt_bar, 4.0)
+        # A bar at or below the near-miss floor would empty that bucket's
+        # near-miss band, silently hiding the roles he most wants to see.
+        floor = float(config.profile()["review"]["worth_knowing_floor"])
+        check("the most lenient bar still leaves a near-miss band",
+              overlap_bar > floor, True)
+
+        # A marketing-only posting MUST be judged on the growth rubric: under
+        # scoring.yml, dimension 1 (weight 22) makes AI enablement the hard
+        # requirement, so a pure marketing role cannot clear the bar there.
+        check("marketing bucket is judged on the growth rubric",
+              config.bucket_rubric(config.BUCKET_MARKETING), config.TRACK_GROWTH)
+        check("overlap is judged on the AI rubric",
+              config.bucket_rubric(config.BUCKET_OVERLAP), config.TRACK_AI)
+
+        # Routing: the buckets are disjoint, so an overlap posting appears in
+        # the overlap list ONLY and needs no dedupe between lists.
+        both = make_posting(source_id="J-BOTH", company="Bothco",
+                            url="https://example.com/jobs/both")
+        bid, _ = store.upsert_posting(conn, both, run2)
+        conn.execute("UPDATE postings SET tracks = ? WHERE id = ?",
+                     ("ai_enablement,growth_marketing", bid))
+        store.record_evaluation(
+            conn, bid, run_id=run2, rubric_version="1",
+            dimension_scores={str(i): 4.2 for i in range(1, 11)},
+            weighted_score=4.2, block_g_verdict="PASS", block_g_flags=[],
+            fit_summary="Both.", track="ai_enablement",
+        )
+        check("a both-tracks posting lands in overlap",
+              bid in {r["id"] for r in store.presentable(
+                  conn, 3.75, bucket=config.BUCKET_OVERLAP)}, True)
+        check("...and not in the AI list",
+              bid in {r["id"] for r in store.presentable(
+                  conn, 3.85, bucket=config.BUCKET_AI)}, False)
+        check("...and not in the marketing list",
+              bid in {r["id"] for r in store.presentable(
+                  conn, 4.0, bucket=config.BUCKET_MARKETING)}, False)
+
+        # A marketing-only posting's only score is recorded under the growth
+        # track. Filtering on bucket AND track would return nothing, so
+        # presentable drops the track filter whenever a bucket is given.
+        mkt = make_posting(source_id="J-MKT", company="Mktco",
+                           url="https://example.com/jobs/mkt")
+        mid, _ = store.upsert_posting(conn, mkt, run2)
+        conn.execute("UPDATE postings SET tracks = ? WHERE id = ?",
+                     ("growth_marketing", mid))
+        store.record_evaluation(
+            conn, mid, run_id=run2, rubric_version="1",
+            dimension_scores={str(i): 4.3 for i in range(1, 11)},
+            weighted_score=4.3, block_g_verdict="PASS", block_g_flags=[],
+            fit_summary="Marketing.", track="growth_marketing",
+        )
+        check("a growth-scored posting is found by its bucket",
+              mid in {r["id"] for r in store.presentable(
+                  conn, 4.0, bucket=config.BUCKET_MARKETING)}, True)
+
         # ------------------------------------------------------- near misses
         print("\nnear misses (targeted mode only)")
 

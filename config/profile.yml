@@ -169,6 +169,61 @@ review:
   worth_knowing_floor: 3.7
   max_worth_knowing: 3
 
+  # Three buckets, three bars. Doran, 2026-08-28, on how hard each should be to
+  # get into: "be more lenient in the scoring to let more stuff slip in to the
+  # cut line if it's in that bucket where it's AI plus marketing merged
+  # together. And then be slightly less lenient when it's only AI. And then
+  # don't really be too lenient at all in scoring when it's just pure
+  # traditional marketing." On the size of it: "like a scale of 0, +1, +2."
+  #
+  # THIS IS A BAR, NOT A SCORE BONUS. Nothing here can move a score, so no
+  # calibration anchor can drift because of it. Adding points to the buckets
+  # instead would have moved every anchor at once.
+  #
+  # Sized against every score on record: a 0.15 step newly admits 11 postings
+  # across the entire history (0.10 admits 6, 0.20 admits 15). A nudge, not a
+  # shove, which is what he asked for.
+  #
+  # Overlap is 3.75 rather than 3.70 on purpose. worth_knowing_floor above is
+  # 3.7, and the near-miss tier selects `score < bar AND score >= floor` -- so a
+  # 3.70 bar would leave the overlap bucket with an empty near-miss band and
+  # silently stop showing him the very roles he called his sweet spot.
+  bucket_thresholds:
+    overlap: 3.75          # AI + marketing, his sweet spot
+    ai_only: 3.85          # AI enablement, strategy or builder
+    marketing_only: 4.0    # traditional marketing, normal bar
+
+# Applied postings the regression check should stop alarming about.
+#
+# `cli.py calibrate --applied-only` treats every job Doran applied to as a
+# positive example and shouts REGRESSION if one would no longer reach scoring.
+# That alarm is only useful while it means something, so a posting that is
+# genuinely un-findable for a reason we have accepted belongs here rather than
+# left ringing forever.
+#
+# This does NOT hide anything. An exempted posting is still listed on every run,
+# marked KNOWN instead of BLOCKED, with its reason printed underneath. It simply
+# stops counting as a failure.
+#
+# Add an entry only when the miss has been diagnosed and consciously accepted.
+# Never add one to make a red check go green.
+regression_exemptions:
+  - url: https://www.google.com/about/careers/applications/jobs/results/124589741742924486-program-manager-ai-and-gemini-app-marketing
+    added: 2026-08-28
+    reason: >-
+      Google posted this job twice, at two levels. Doran applied to the 5-year
+      req ($136k-$196k), which scores 34.0 against the 40.0 relevance floor. Its
+      3-year twin ($111k-$159k, id 106281886908588742) scores 48.5 and passes,
+      so a scan DOES surface this role, just through the other advert. The gap
+      is entirely that the senior description omits "agentic", "AI agent" and
+      "AI-agentic", which its twin uses. Every other applied posting scores 45.5
+      or higher (median 78), so this one is an unusually vague advert rather
+      than a hole in the net. Two candidate fixes were measured and rejected on
+      2026-08-28: scoring "automating manual work" and the verb "orchestrate"
+      would have admitted 23 mostly off-archetype postings AND still left this
+      one at 39.0. Doran: "if this one is a one off edge case, I don't want to
+      try to do heavy work to our workflow just to fit this one specific job."
+
 # How hard we are allowed to lean on other people's servers.
 #
 # Getting blocked by Greenhouse, Ashby or Lever would break this entire workflow,
@@ -227,3 +282,54 @@ discovery:
   # Seven of the twelve matches in run 14 came through one of these.
   aggregator_slugs:
     - jobgether
+
+  # Named third-party platforms. On a reseller listing that hides the employer,
+  # the stack it expects you to work in is the one thing it cannot anonymise --
+  # "Salesforce, Seismic, Gong, Snowflake, Slack" alongside "seller feedback" is
+  # a sales-tech company. Printed on reseller listings only, and only when three
+  # or more appear, because one or two generic tools say nothing.
+  stack_tells:
+    - Salesforce
+    - Seismic
+    - Gong
+    - Notion
+    - Snowflake
+    - Slack
+    - Marketo
+    - HubSpot
+    - Pardot
+    - Outreach
+    - Salesloft
+    - Clari
+    - 6sense
+    - Demandbase
+    - Segment
+    - Amplitude
+    - Mixpanel
+    - Looker
+    - Tableau
+    - dbt
+    - Databricks
+    - Zapier
+    - n8n
+    - Workato
+    - Airtable
+    - Contentful
+    - Sanity
+    - Webflow
+    - Optimizely
+    - Braze
+    - Iterable
+    - Klaviyo
+    - Intercom
+    - Zendesk
+    - Jira
+    - Asana
+    - LangChain
+    - LangGraph
+    - Cursor
+    - Claude
+    - Codex
+    - Dust
+    - Vercel
+    - Netlify

@@ -1,5 +1,5 @@
 ---
-description: Sweep all watched companies for live postings from the last 60 days, score them A-G, and report matches scoring 4.0+
+description: Sweep all watched companies for live postings from the last 60 days, score them A-G, and report matches in three buckets - AI+marketing, AI enablement, and marketing - each with its own bar
 ---
 
 Run a broad job scan. Follow these steps exactly.
@@ -52,9 +52,18 @@ then:
 python cli.py record-eval --run <run_id> --file data/runs/<run_id>/scores.json
 ```
 
+**Do not add `--track`.** `scores.template.json` now carries a `track` per
+posting, derived from its bucket, and `record-eval` resolves the rubric per item.
+That matters: a marketing-only role judged against `scoring.yml` cannot clear the
+bar, because dimension 1 (weight 22) makes AI enablement the hard requirement.
+Before this was fixed every evaluation was filed as `ai_enablement` and the
+marketing list was empty for the system's whole history. Keep the `track` values
+the template generated.
+
 ## 3b. Resolve San Francisco offices — last step, finalists only
 
-Do this **after** scoring and **only** for postings that both clear 4.0 and
+Do this **after** scoring and **only** for postings that both clear their
+bucket's bar and
 resolve to San Francisco. That is typically two or three per run, so it costs
 almost nothing; running it during discovery would mean thousands of lookups and
 is never correct.
@@ -73,6 +82,35 @@ Mission 55, Marina 60, Richmond 66, and so on).
 If no neighborhood can be established, keep the 55 fallback and say so in the Fit
 Summary rather than guessing — guessing low flatters the role, guessing high
 hides it.
+
+## 3c. Settle the close calls — optional, and bounded
+
+```
+python cli.py tiebreak --run <run_id>
+```
+
+This writes `data/runs/<run_id>/tiebreak.md`: every posting whose score landed
+within **0.20** of the bar for its own bucket, with the **full** posting body
+attached. It changes nothing on its own.
+
+Read those bodies — the whole body, not the fit summary you just wrote and not
+the block notes — and ask one question: does the score read right against what
+this job actually is? Agiloft's "Director, Global Campaigns" is why this step
+exists. It was scored 3.0 on dimension 1 from a truncated excerpt, and Doran had
+to correct it from the posting himself.
+
+Then answer in `tiebreak.json` and apply:
+
+```
+python cli.py record-tiebreak --file data/runs/<run_id>/tiebreak.json
+```
+
+The licence is narrow on purpose and `record-tiebreak` enforces it rather than
+trusting you: at most **±0.15** per posting, **two verbatim quotes** of 25+
+characters checked against the stored body, **30 postings per run**. A nudge can
+carry a posting across the bar; it can never overturn a score. Leaving every
+posting alone is a valid and common answer — an adjustment with no quotable
+reason is exactly what this must not become.
 
 ## 4. Report
 
@@ -117,6 +155,18 @@ Then tell Doran he can respond with `/feedback` to rule on what he just saw.
 
 ## Fit Summary style — this is the part he cares most about
 
+**This summary replaces the posting.** Doran, 2026-08-28: *"the ultimate goal in
+writing this summary is really so that I don't need to read the entire job
+posting."* If he has to open the link to learn what the job is, it failed.
+
+**The format is checked.** `record-eval` prints a `FIT SUMMARY` warning for any
+summary that misses these, and a warning means rewrite it before you report:
+
+- **Exactly 2 paragraphs.**
+- **At least 2 verbatim quotes** from the posting — these are the evidence.
+- **6 sentences maximum**, both paragraphs combined.
+- **320 characters minimum.**
+
 Doran confirmed this format works, so do not drift from it. Two paragraphs:
 
 1. **What the role is, and what maps to him.** Plain terms first, then *named*
@@ -133,8 +183,21 @@ Write to him in the second person. Full guidance in `rubric/rubric-A-G.md`.
 
 ## Rules
 
-- Present only postings scoring 4.0 or higher as matches. Never pad the list.
-- Anything scoring 3.7–4.0 appears only as a capped one-line mention under "Worth
+- **Three buckets, three bars.** `cli.py report` routes every posting into
+  exactly one of them and applies the right bar automatically, so do not filter
+  by hand and do not assume 4.0:
+
+  | Bucket | Bar | What it is |
+  | --- | --- | --- |
+  | AI + marketing overlap | **3.75** | Doran's sweet spot, most lenient |
+  | AI enablement only | **3.85** | AI strategy, enablement or builder |
+  | Marketing only | **4.00** | Traditional growth and web, normal bar |
+
+  The bars live in `config/profile.yml` under `review.bucket_thresholds`. The
+  leniency is a presentation bar, never a score bonus, which is why no anchor
+  moves when it changes.
+- Never pad a list. The bucket bar is the bar.
+- Anything within 0.30 of its bucket's bar appears only as a capped one-line mention under "Worth
   knowing about" — never a full write-up, never mixed into the matches. He asked
   not to have near-misses hidden, not to have the bar lowered.
 - Never build, suggest, or run anything that submits an application.

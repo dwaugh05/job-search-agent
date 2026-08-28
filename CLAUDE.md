@@ -64,8 +64,21 @@ remove jargon, give him the next action.
    time. This doubles as the liveness check — we only evaluate jobs that are
    actually accepting applications.
 
-3. **NO SPRAY AND PRAY.** Only postings scoring >= 4.0 are ever presented as
-   matches. Doran's application time is the scarce resource. Never pad a report.
+3. **NO SPRAY AND PRAY.** Only postings that clear **their bucket's bar** are
+   ever presented as matches. Doran's application time is the scarce resource.
+   Never pad a report.
+
+   The bars live in `config/profile.yml` under `review.bucket_thresholds` and
+   are, as of 2026-08-28: **marketing-only 4.0, AI-only 3.85, AI+marketing
+   overlap 3.75.** This replaced a flat 4.0 at Doran's request: "be more lenient
+   ... if it's in that bucket where it's AI plus marketing merged together. And
+   then be slightly less lenient when it's only AI. And then don't really be too
+   lenient at all in scoring when it's just pure traditional marketing."
+
+   The leniency is a **presentation bar, never a score bonus.** Nothing in it can
+   move a score, which is why no calibration anchor drifted when it landed.
+   Adding points to a bucket instead would have moved every anchor at once, and
+   is not an acceptable way to implement this.
 
 4. **NO CREDENTIAL STORAGE.** Browser work uses Doran's own logged-in Chrome via
    the `claude-in-chrome` MCP. Never store, request, or hardcode credentials.

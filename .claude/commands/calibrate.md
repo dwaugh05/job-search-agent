@@ -1,10 +1,16 @@
 ---
-description: Regression-test the rubric by re-scoring the five calibration anchors and checking each lands in its expected band
+description: Regression-test the rubric against the calibration anchors AND every job Doran has applied to, so no change can quietly make a real match invisible
 ---
 
 Verify the rubric still scores Doran's known examples the way he rated them. Run this
-after any change to `config/scoring.yml`, `rubric/rubric-A-G.md`, or
-`rubric/learned-rules.md` — and always before trusting the first scan of a session.
+after any change to `config/scoring.yml`, `rubric/rubric-A-G.md`,
+`rubric/learned-rules.md`, `config/profile.yml`, or `src/careerops/prefilter.py` —
+and always before trusting the first scan of a session.
+
+**There are two halves and they catch different failures.** The anchors are scored
+from documents and never touch the deterministic gates, so they cannot notice a
+geography, title-band, comp or killer-term change that stops a real job reaching the
+rubric at all. The applied-job check is the half that can. Run both.
 
 ## 1. Build the queue
 
@@ -69,3 +75,42 @@ Report which anchor moved and in which direction, then diagnose:
   scan output can be trusted until it is fixed.
 
 Fix the rubric, not the scores. Re-run until every anchor lands in band.
+
+## 5. The applied-job regression check
+
+```
+python cli.py calibrate --applied-only
+```
+
+`calibrate --check` already runs this automatically; the flag above is for running
+it alone, which is the fast one to reach for after touching a gate.
+
+**Every job Doran applied to is a positive example that must keep working.** For each
+one this re-runs the deterministic gates and re-reads the recorded score, and asks:
+
+1. Would it still get through discovery to be scored at all?
+2. Did it still clear the 4.0 bar when it was scored?
+
+Freshness is excluded on purpose — every applied posting ages out eventually, and
+that is the window working, not a regression.
+
+**A `BLOCKED` line is the serious one.** It means a change to the gates has made a
+role Doran actually wanted invisible, and no scan can be trusted until it is fixed.
+The check exits non-zero so it can gate a change.
+
+This was added on 2026-08-26 after exactly that: the title gate was throwing out
+GitLab's "AI Transformation Owner, CRO" — a posting Doran applied to *and* a pinned
+anchor scoring 4.53 — because "CRO" there names the org the role sits inside rather
+than the role's own rank. Calibration was green the entire time.
+
+When a `BLOCKED` line appears, the fix is almost never to loosen the gate wholesale.
+Ask what distinction the gate is failing to draw, and encode that instead: a bare
+C-suite acronym in a trailing clause names an org, while a spelled-out "Vice
+President" is a rank, and JPMorgan's anti-example still has to fail.
+
+A `note:` about older rubric versions is not a failure. It means those scores are
+history rather than a live claim; the gate result on the same line is live either
+way, and it is the gate result that matters here.
+
+The check gets stronger every time Doran marks something applied, so it is worth
+recording verdicts even for roles he has already heard back on.

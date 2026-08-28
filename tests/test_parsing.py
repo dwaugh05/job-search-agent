@@ -155,6 +155,60 @@ check("ATS code: multi-word city survives",
 check("plain city is not mistaken for an ATS code",
       parse_location("San Mateo")[0], "San Mateo")
 
+# --------------------------------------------- country-first location strings
+#
+# Added 2026-08-28. Sony Interactive Entertainment writes
+# "United States, San Mateo, CA" where most employers write the country last.
+# parse_location read the country off the TAIL and took the HEAD as the city, so
+# the city was recorded as the string "United States" -- which matches nothing in
+# commute.yml, and rejected the posting as "unknown location".
+#
+# Measured that day: 241 Sony postings, ALL rejected before scoring, 0 ever
+# scored; 141 postings across the DB were country-first with a real city, 80 of
+# them five minutes from home.
+
+check("country-first, comma delimited",
+      parse_location("United States, San Mateo, CA"),
+      ("San Mateo", "CA", "United States"))
+check("country-first, a genuinely far city still parses",
+      parse_location("United States, San Diego, CA"),
+      ("San Diego", "CA", "United States"))
+# Gilead. Hyphen delimited, and the state is spelled out.
+check("country-first, hyphen delimited",
+      parse_location("United States - California - Foster City"),
+      ("Foster City", "CA", "United States"))
+# Eightfold's raw field. This used to be reversed inside sources/eightfold.py;
+# the shared parser handles it now and that local helper was deleted.
+check("country-first, two-letter code",
+      parse_location("US, CA, Santa Clara"),
+      ("Santa Clara", "CA", "United States"))
+
+# A country alone is an eligibility note, not a place. The work-model prefix
+# strips "Remote - USA" down to a bare "USA", which must not become a city.
+check("bare country code is not a city",
+      parse_location("Remote - US"), (None, None, "United States"))
+check("bare country name is not a city",
+      parse_location("Remote - USA"), (None, None, "United States"))
+check("country with no city yields no city",
+      parse_location("United States"), (None, None, "United States"))
+check("country piped with remote yields no city",
+      parse_location("United States | Remote"), (None, None, "United States"))
+
+# The guards. Each of these was already correct and must stay correct: the
+# leading-country strip is deliberately limited to unambiguous US markers, and
+# never runs off _COUNTRY_CODES, which maps CA to Canada and IL to Israel.
+check("guard: a state that is also a country name",
+      parse_location("Georgia, United States"), (None, "GA", "United States"))
+check("guard: a city that is also a state name",
+      parse_location("Washington, DC"), ("Washington", "DC", "United States"))
+check("guard: country last still works",
+      parse_location("New York, NY, United States"),
+      ("New York", "NY", "United States"))
+check("guard: a city-state keeps its name",
+      parse_location("Singapore, Singapore"), ("Singapore", None, "Singapore"))
+check("guard: plain city/state untouched",
+      parse_location("San Mateo, CA"), ("San Mateo", "CA", "United States"))
+
 # Multi-site postings list every location; the first is the primary site. Okta's
 # "Bellevue, Washington; Chicago, Illinois;" was resolving to the wrong state.
 check("semicolon list takes the first site",
@@ -214,6 +268,198 @@ noise_score, _ = score_relevance("Senior Backend Engineer", noise)
 check("archetype clears the floor", arch_score >= 40, True)
 check("unrelated engineering role does not", noise_score < 40, True)
 check("archetype scores well above noise", arch_score > noise_score * 3, True)
+
+# --------------------------------------------- synonyms for the AI-side angles
+#
+# Added 2026-08-28. Google's "Program Manager, AI and Gemini App Marketing"
+# scored 36.5 against the 40.0 floor and was never read, because it states the
+# archetype in plain English rather than in buzzwords: "your main objective is
+# to equip marketers with the tools and processes to move with greater agility
+# and velocity." Doran: "a good example of a role that can point out phrases we
+# should add... I know the pay is low, but that's the only reason why it should
+# get knocked."
+#
+# The rule these lock in: a posting is rejected for what the JOB is, never for
+# which words it happened to choose.
+
+print("\nAI-side synonyms")
+
+from careerops.prefilter import (  # noqa: E402
+    EQUIPS_MARKETERS_MARK, TITLE_SPLIT_MARK, _has_both_sides,
+)
+
+_equip = ("Our team is the operational engine connecting product and marketing "
+          "strategy to execution. Your main objective is to equip marketers with "
+          "the tools and processes to move with greater agility and velocity. "
+          "Act as the vanguard for the team's AI transformation, transitioning "
+          "manual, fragmented templates into automated, real-time ones.")
+_score, _matched = score_relevance("Program Manager, AI and Gemini App Marketing", _equip)
+check("'equip marketers' is recognised as the archetype",
+      EQUIPS_MARKETERS_MARK in _matched, True)
+check("a split AI-and-marketing title earns the bonus",
+      TITLE_SPLIT_MARK in _matched, True)
+check("it satisfies both sides", _has_both_sides(_matched), True)
+# The excerpt above is a fragment; the live posting is ~2,900 characters. What
+# is asserted here is the SIZE of the recovery the two additions make, which is
+# what carried the real posting from 36.5 to 48.5 and over the 40.0 floor.
+_bare, _ = score_relevance("Program Manager, Gemini App Launches",
+                           _equip.replace("equip marketers", "manage timelines"))
+check("the two additions are worth the 9.0 points that closed the gap",
+      round(_score - _bare, 1), 9.0)
+
+# The split-title bonus must never stack on a title that already scored.
+_, _lit = score_relevance("AI Marketing Technologist Lead", _equip)
+check("a literal title term suppresses the split-title bonus",
+      TITLE_SPLIT_MARK in _lit, False)
+check("the literal title term still fires",
+      any(m.startswith("title:") for m in _lit), True)
+
+# The verb family generalises; the literal phrases alone are each near-zero
+# frequency in the corpus, which is why this is a pattern and not dict entries.
+for _phrase in ("equip marketers", "equipping our marketers", "empower marketers",
+                "enable the marketing team", "upskilling the marketing org"):
+    _, _m = score_relevance("Program Manager", f"We will {_phrase} with new tools.")
+    check(f"verb family covers {_phrase!r}", EQUIPS_MARKETERS_MARK in _m, True)
+
+# Enablement of a non-marketing audience must NOT trip it.
+_, _m = score_relevance("Program Manager", "We will equip engineers with new tools.")
+check("'equip engineers' does not count as marketing enablement",
+      EQUIPS_MARKETERS_MARK in _m, False)
+
+# The four angles Doran named. Each phrase was kept only because it is rare
+# corpus-wide and concentrated in the on-archetype near-miss band.
+for _term in ("ai roadmap", "ai vision", "ai council", "agent-powered",
+              "ai-powered workflow", "internal ai", "ai architect", "applied ai"):
+    _, _m = score_relevance("Manager", f"You will own the {_term} for the marketing team.")
+    check(f"{_term!r} is scored on the AI side", _term in _m, True)
+
+# Function-naming enablement terms are CONTEXT, not evidence of AI. They name
+# which org is being enabled, and plenty of postings using them are ordinary
+# sales enablement with no AI at all -- so they must never sit on the AI side,
+# where they could single-handedly declare such a role to be AI enablement.
+from careerops.prefilter import (  # noqa: E402
+    AI_ENABLEMENT_TERMS, MARKETING_CONTEXT_TERMS,
+)
+for _term in ("gtm enablement", "marketing enablement", "go-to-market enablement"):
+    check(f"{_term!r} is on the context side", _term in MARKETING_CONTEXT_TERMS, True)
+    check(f"{_term!r} is NOT on the AI side", _term in AI_ENABLEMENT_TERMS, False)
+
+
+# ------------------------------- sales adjacency, and teaching non-builders
+#
+# Added 2026-08-28. Apple's "Agentic AI Product Manager, Platform - Sales"
+# scored 48.0 -- well clear of the 40.0 floor -- and was still blocked, because
+# _has_both_sides only accepted marketing or company-wide as a business context
+# and the posting says "sales" five times and "marketing" zero.
+#
+# Doran: "the fact that it's sales only isn't necessarily a hard blocker, but
+# rather, maybe it should make the scoring system slightly hurt to lose a point
+# or points. But a blocker is too harsh because marketing and sales are still
+# somewhat adjacent roles." And on what he is actually hunting for: "A key thing
+# I'm looking for is teaching non-technical people to build agents."
+
+print("\nsales adjacency and non-technical builders")
+
+from careerops.prefilter import (  # noqa: E402
+    NONTECHNICAL_BUILDER_MARK, SALES_CONTEXT_MARK, SALES_CONTEXT,
+    NONTECHNICAL_BUILDER_WEIGHT,
+)
+
+_apple = ("We're investing in the platforms and infrastructure that let teams "
+          "across our worldwide sales organization build, run, and scale AI "
+          "agents. You'll be the voice of every user, from the non-technical "
+          "person who just wants to run an agent to the engineer who builds one "
+          "from scratch. Experience with MCP and agentic workflows preferred.")
+_s, _m = score_relevance("Agentic AI Product Manager, Platform - Sales", _apple)
+check("teaching non-technical people to build is recognised",
+      NONTECHNICAL_BUILDER_MARK in _m, True)
+check("a sales org counts as a business context", SALES_CONTEXT_MARK in _m, True)
+check("a sales-org AI enablement role is no longer blocked",
+      _has_both_sides(_m), True)
+# The excerpt above is a fragment; the live posting scores 52.5 and clears the
+# 40.0 floor. What is pinned here is the contribution of the new signal.
+_without, _ = score_relevance(
+    "Agentic AI Product Manager, Platform - Sales",
+    _apple.replace("non-technical person who just wants to run an agent",
+                   "engineering manager"))
+check("the non-technical-builder signal is worth its stated weight",
+      round(_s - _without, 1), NONTECHNICAL_BUILDER_WEIGHT)
+
+# Sales context must be a GATE, never a score. Scored at even 2.0 it admitted
+# 109 extra postings, nearly all ordinary sales jobs. Terms unique to
+# SALES_CONTEXT are used here; "field organization" is deliberately left out
+# because it already carries its own weight in ENTERPRISE_CONTEXT_TERMS.
+_plain = ("Lead our sales organization and sales team. You will manage the "
+          "commercial team and support sellers day to day.")
+_sales_only, _sm = score_relevance("Channel Sales Director", _plain)
+check("sales vocabulary alone is worth zero points", _sales_only, 0.0)
+check("but it is still recorded as a context", SALES_CONTEXT_MARK in _sm, True)
+check("sales vocabulary alone still fails the AI side",
+      _has_both_sides(_sm), False)
+
+# The non-technical builder signal needs the AI context in the same breath.
+_, _m2 = score_relevance("Analyst",
+                         "Enable non-technical users to build their own reports "
+                         "in the BI tool.")
+check("'non-technical build' without AI context does not fire",
+      NONTECHNICAL_BUILDER_MARK in _m2, False)
+_, _m3 = score_relevance("Manager",
+                         "Help business users build and deploy AI agents themselves.")
+check("'non-technical build' with AI context does fire",
+      NONTECHNICAL_BUILDER_MARK in _m3, True)
+check("it is weighted as a strong archetype signal",
+      NONTECHNICAL_BUILDER_WEIGHT >= 4.0, True)
+
+# ------------------------------- marketing wearing AI vocabulary, and seniority
+#
+# Two calibration mechanisms added 2026-08-28 from Doran feedback.
+
+print("\nbucketing and seniority caps")
+
+from careerops.prefilter import (  # noqa: E402
+    MARKETING_IN_AI_CLOTHING, seniority_cap,
+)
+
+# Vercel says "agent" 14 times and never says enablement, upskill or train --
+# those agents are the AUDIENCE, not something the job builds. Doran: "your
+# scoring is getting confused by some of the AI key phrases without
+# understanding what the job really is about at its core, which is AEO."
+#
+# The threshold sits in the gap between the roles he rejected (MongoDB AEO at
+# 2.6x, Vercel 2.1x, Apollo 1.8x) and the one he defended (Agiloft at 1.2x).
+check("the ratio threshold sits between Apollo and Agiloft",
+      1.2 < MARKETING_IN_AI_CLOTHING < 1.8, True)
+
+# The Director rule, enforced rather than remembered. Written as a rubric
+# instruction on 2026-08-14, reinforced 2026-08-28, and STILL not applied:
+# run 25 scored Freshworks "Director, GTM Systems Architecture" at a full 5.0.
+check("a Director in a discipline he cannot claim is capped",
+      seniority_cap("Director - GTM Systems Architecture",
+                    "Operating-model and architecture design."), 3.5)
+check("a Director in growth and web is not capped",
+      seniority_cap("Director, DTC Growth and Web Experience",
+                    "named specialism is growth and web"), None)
+check("a Senior Director in AI enablement is not capped",
+      seniority_cap("Senior Director, Applied AI",
+                    "AI enablement shape, roadmap and governance"), None)
+check("a Director in demand generation is capped",
+      seniority_cap("Director, Global Campaigns",
+                    "a Director title in demand generation"), 3.5)
+check("field marketing is capped too",
+      seniority_cap("Director, Americas Field Marketing",
+                    "field marketing directorship"), 3.5)
+check("a VP title is capped", seniority_cap("VP, Marketing", "vp seat"), 3.5)
+# Below Director the cap must never fire -- he is explicit that he does not get
+# stuck on titles and rates an IC seat highly.
+check("a Senior Manager is untouched",
+      seniority_cap("Senior Manager, Web", "Senior Manager, real scope"), None)
+check("an engineer seat is untouched",
+      seniority_cap("GTM Engineer, Revenue Operations", "a builder seat"), None)
+
+# record-eval is where the cap runs, so the wiring must stay connected.
+_cli_src = (Path(__file__).resolve().parents[1] / "cli.py").read_text(encoding="utf-8")
+check("record-eval applies the seniority cap",
+      "prefilter_mod.seniority_cap(" in _cli_src, True)
 
 # ---------------------------------------------------------- config integrity
 

@@ -18,7 +18,17 @@ from . import comp as comp_mod
 from . import config, store
 from .normalize import age_days
 
-DESCRIPTION_CHARS = 7000
+# Postings are NOT truncated in practice. The old 7,000-char cap silently cut
+# 56% of every posting that reached scoring, and it cut the wrong end: Agiloft's
+# "Director, Global Campaigns" carried its AI mandate at char 2,372 but its
+# "coaching the team on AI fluency" line at 10,122 and its named tools (Claude,
+# Glean, Perplexity, ChatGPT) at 12,122. Both were invisible, so the role was
+# scored 3.0 on dimension 1 and Doran had to correct it from the posting itself.
+# The longest posting on record is 20,055 chars; this cap exists only to stop a
+# pathological blob, and when it does fire it keeps the tail as well as the
+# head, because responsibilities open a posting and compensation closes it.
+DESCRIPTION_CHARS = 24000
+DESCRIPTION_TAIL_CHARS = 6000
 
 
 def _posting_block(conn: sqlite3.Connection, row: sqlite3.Row, index: int) -> str:
@@ -37,9 +47,14 @@ def _posting_block(conn: sqlite3.Connection, row: sqlite3.Row, index: int) -> st
         )
 
     description = (row["description"] or "").strip()
-    truncated = len(description) > DESCRIPTION_CHARS
-    if truncated:
-        description = description[:DESCRIPTION_CHARS] + "\n\n[...truncated...]"
+    if len(description) > DESCRIPTION_CHARS:
+        head = DESCRIPTION_CHARS - DESCRIPTION_TAIL_CHARS
+        cut = len(description) - DESCRIPTION_CHARS
+        description = (
+            description[:head]
+            + f"\n\n[...{cut:,} characters omitted from the middle...]\n\n"
+            + description[-DESCRIPTION_TAIL_CHARS:]
+        )
 
     lines = [
         f"### {index}. {row['title']} - {row['company']}",
@@ -113,6 +128,15 @@ def render(conn: sqlite3.Connection, rows: list[sqlite3.Row], run_id: int,
                 "posting_id": row["id"],
                 "company": row["company"],
                 "title": row["title"],
+                # Which rubric this posting is judged against. Emitted per item
+                # because a queue mixes buckets: a marketing-only role scored
+                # under scoring.yml cannot clear the bar, since dimension 1
+                # (weight 22) makes AI enablement the hard requirement. Before
+                # this, record-eval was called with no --track at all and every
+                # evaluation was filed as ai_enablement -- which is why the
+                # marketing list was empty for the system's whole history.
+                "track": config.bucket_rubric(config.bucket_of(row["tracks"])),
+                "bucket": config.bucket_of(row["tracks"]),
                 "dimension_scores": {},
                 "block_notes": {},
                 "block_g_verdict": "PASS",

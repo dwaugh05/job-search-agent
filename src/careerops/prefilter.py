@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 from . import commute as commute_mod
 from . import config
@@ -50,6 +51,49 @@ AI_ENABLEMENT_TERMS: dict[str, float] = {
     "artificial intelligence": 1.5,
     "generative ai": 3.0,
     "genai": 3.0,
+    # ---------------------------------------------------------------------
+    # Added 2026-08-28, at Doran's request, after the Google "Program Manager,
+    # AI and Gemini App Marketing" miss. His instruction: "think about the
+    # synonym phrases that would help capture the AI builder or AI architect or
+    # AI enablement and AI strategy angles. Since those are worth the most
+    # points because they're the most important to me."
+    #
+    # Every weight below was set from a measurement over 28,812 stored postings:
+    # how often the phrase appears corpus-wide, against how often it appears in
+    # the 30-40 point near-miss band whose titles are on-archetype. The ratio of
+    # those two ("lift") is what separates a real synonym from boilerplate.
+    #
+    # AI STRATEGY angle. Rare, and strongly concentrated in near misses.
+    "ai roadmap": 4.5,          # 0.28% of corpus, 10.9x lift
+    "ai vision": 4.0,           # 0.10% of corpus, 16.9x lift
+    "ai council": 4.0,          # 0.02% of corpus, 32.7x lift
+    "ai opportunities": 3.5,    # 0.13% of corpus, 7.9x lift
+    # AI BUILDER angle. "agent-powered" is the rarest and cleanest signal here.
+    "agent-powered": 4.5,       # 0.09% of corpus, 43.1x lift
+    "ai-powered workflow": 4.0, # 0.95% of corpus, 5.0x lift
+    "internal ai": 3.5,         # 0.64% of corpus, 4.8x lift
+    "automate workflows": 3.0,
+    "automating workflows": 3.0,
+    #
+    # AI ARCHITECT angle, deliberately held to 3.0 and 2.5 rather than the 4.5+
+    # their lift alone would justify.
+    #
+    # "applied ai" (9.1x lift) and "ai architect" (12.0x) are genuinely Doran's
+    # vocabulary, but measured at full weight they pulled 145 new postings over
+    # the floor and the top of that list was almost entirely customer-facing
+    # solutions-architect roles at AI vendors: OpenAI, Anthropic, Cohere,
+    # Snorkel. The 2026-08-12 learned rule already says those are NOT the
+    # archetype ("they help the vendor's customers adopt AI rather than enabling
+    # an internal organization") and that the prefilter cannot tell them apart.
+    # At these weights the same change admits 97, of which two thirds are
+    # internal roles -- Chime "Software Engineer, AI Enablement", iFIT "Director
+    # of AI, Operations", Match Group "Principal, Applied AI Enablement" -- and
+    # a vendor SA role now needs corroborating signal rather than clearing the
+    # floor on its job title alone.
+    "ai architect": 3.0,
+    "applied ai": 3.0,
+    "ai deployment": 2.5,
+    "ai implementation": 2.5,
 }
 
 MARKETING_CONTEXT_TERMS: dict[str, float] = {
@@ -76,6 +120,14 @@ MARKETING_CONTEXT_TERMS: dict[str, float] = {
     "sales enablement": 2.0,
     "funnel": 1.5,
     "pipeline": 1.0,
+    # Added 2026-08-28. Deliberately on the CONTEXT side, not the AI side: these
+    # name the function being enabled, and plenty of postings that use them are
+    # ordinary sales enablement with no AI in them. Putting them here means they
+    # can help a posting clear the floor but can never, on their own, convince
+    # _has_both_sides that a role is AI enablement.
+    "marketing enablement": 3.5,
+    "gtm enablement": 3.0,
+    "go-to-market enablement": 3.0,
 }
 
 BUILD_TERMS: dict[str, float] = {
@@ -195,6 +247,12 @@ GROWTH_CREATION_TERMS: dict[str, float] = {
     "events": 0.5,
     "sem": 1.5,
     "pipeline generation": 2.0,
+    # Added 2026-08-26. Zapier's "Sr. Manager, Performance Marketing" mentioned
+    # account-based marketing nine times and the system saw none of them, so a
+    # role built on ABM and paid media scored 4.75. Doran: "I don't really talk
+    # about account based marketing (ABM) or Paid Media as a strong suit."
+    "account-based marketing": 1.5,
+    "account based marketing": 1.5,
 }
 
 # Signals that a role is predominantly traffic creation rather than capture.
@@ -203,7 +261,10 @@ CREATION_HEAVY = re.compile(
     r"campaign management|campaign workflows?|media spend|digital media|"
     r"budget pacing|multi-?channel budgets?|ad formats?|affiliate|influencer|"
     r"webinars?|field marketing|events? marketing|channel strategy|"
-    r"demand generation|demand gen|integrated campaigns?)\b",
+    r"demand generation|demand gen|integrated campaigns?|"
+    # ABM is traffic creation by another name: outbound target-account
+    # campaigns, not the website conversion work Doran owns.
+    r"account.based marketing|abm)\b",
     re.IGNORECASE,
 )
 CAPTURE_SIGNALS = re.compile(
@@ -322,6 +383,184 @@ TITLE_BONUS_TERMS: dict[str, float] = {
 # good job, so we err permissive and let the rubric do the fine judgement.
 RELEVANCE_FLOOR = 40.0
 
+# ------------------------------- a marketing role wearing AI vocabulary
+#
+# Vercel's "Growth Marketing Manager, Discoverability" says "agent" fourteen
+# times and says enablement, upskill and train exactly zero times. Those agents
+# are the AUDIENCE -- AI assistants that might recommend Vercel -- not something
+# the job builds. It cleared the AI track on vocabulary alone.
+#
+# Doran, 2026-08-28: "your scoring or checks are getting confused by some of the
+# AI key phrases in here without understanding what the job really is about at
+# its core, which is AEO, not AI that I am interested in... This falls under the
+# marketing list."
+#
+# The separator is how much MARKETING vocabulary a posting carries relative to
+# its AI vocabulary. Measured against his own verdicts:
+#
+#   MongoDB "Answer Engine Optimization Lead"  2.6x  -- he declined it
+#   Vercel  "Discoverability"                  2.1x  -- "the marketing list"
+#   Apollo  "Partner Growth Manager"           1.8x  -- "should score less"
+#   Agiloft "Director, Global Campaigns"       1.2x  -- he asked to KEEP it
+#   Freshworks "GTM Engineer"                  0.6x  -- a great fit
+#
+# So 1.6 sits in the gap between the roles he rejects and the one he defended.
+# A posting over it keeps its growth track and loses its AI track, which lands
+# it in the marketing bucket where the bar is the full 4.0 rather than 3.75.
+# This never removes a posting from the report -- it moves it to a harder list.
+MARKETING_IN_AI_CLOTHING = 1.6
+
+
+# ---------------------------- the Director rule, made mechanical
+#
+# Doran, 2026-08-14: "if the title is director or VP, then they are definitely
+# going to want you to specialize. So it won't really match me unless it's a
+# director or VP level that is a perfect match to my growth marketing web
+# experience or to my AI experience at Cloudflare. I think those are the only
+# two angles I would probably get an interview for a director or VP level title."
+#
+# That was written as a rubric instruction in August 2026 and reinforced two
+# weeks later, and it was still not applied: run 25 scored Freshworks "Director,
+# GTM Systems Architecture" at a FULL 5.0 on seniority -- a Director title in a
+# discipline he cannot claim. Meanwhile Gilead (3.0), Agiloft (3.5) and Life360
+# (4.5, correctly, because growth and web IS his) were all scored right.
+#
+# So the rule works when it is remembered and fails when it is not. The rules
+# that hold in this codebase are the mechanical ones -- the evidence cap and the
+# fit-summary check -- so this becomes a cap rather than a reminder.
+#
+# Doran, 2026-08-28, on why: "you should look at your past attempts so that you
+# can figure out the proper way to make this stick."
+SENIOR_TITLE = re.compile(
+    r"\b(director|head of|head,|vice president|vp|svp|evp|chief)\b", re.IGNORECASE)
+
+# The only two disciplines he clears at that level. The block note has to name
+# one of them, in the same spirit as quoting the posting for the evidence cap.
+CLAIMABLE_SPECIALISMS = re.compile(
+    r"(ai enablement|ai transformation|ai strategy|ai adoption|"
+    # "growth and web" is how the two are usually written together, so match
+    # each word rather than a fixed phrase. A Director note for a discipline he
+    # cannot claim -- field marketing, brand, demand generation, systems
+    # architecture -- contains neither word, which is the point.
+    r"\bgrowth\b|\bweb\b|website|conversion|\bcro\b)", re.IGNORECASE)
+
+SENIORITY_CAP_WITHOUT_SPECIALISM = 3.5
+
+
+def seniority_cap(title: str, block_b_note: str) -> float | None:
+    """Cap for dimension 3 when a senior title names no claimable specialism.
+
+    Returns None when no cap applies.
+    """
+    if not SENIOR_TITLE.search(title or ""):
+        return None
+    if CLAIMABLE_SPECIALISMS.search(block_b_note or ""):
+        return None
+    return SENIORITY_CAP_WITHOUT_SPECIALISM
+
+# ------------------------------------------------- the archetype as a sentence
+#
+# Added 2026-08-28, from Google's "Program Manager, AI and Gemini App Marketing".
+# It scored 36.5 against the 40.0 floor and was never read, despite its stated
+# objective being: "your main objective is to equip marketers with the tools and
+# processes to move with greater agility and velocity." That IS the archetype.
+# It scored nothing because the vocabulary above matches phrases, and the highest
+# scoring ones -- "ai enablement" 6.0, "marketing ai" 5.5, "ai adoption" 5.0 --
+# are buzzwords this posting simply does not use.
+#
+# Doran, on being shown why: "this is a good example of a role that can point out
+# phrases we should add to our scoring points system, so that it does pass. I
+# know the pay is low, but that's the only reason why it should get knocked."
+# The principle: a posting should be rejected for what the JOB is, never for
+# which words it happened to choose.
+#
+# A regex rather than more dict entries because the literal variants are each
+# vanishingly rare -- "equip marketers" appears once in 28,812 postings, "enable
+# marketers" twice -- while the FAMILY (equip/enable/empower/upskill + the
+# marketing org) appears 52 times, which is 0.18% and high precision.
+EQUIPS_MARKETERS = re.compile(
+    r"\b(equip|enabl|empower|upskill)\w*\s+(our\s+|the\s+|their\s+|your\s+)?"
+    r"(marketers|marketing team|marketing org\w*|marketing organi[sz]ation|"
+    r"gtm team|go-to-market team)",
+    re.IGNORECASE,
+)
+EQUIPS_MARKETERS_WEIGHT = 5.0
+EQUIPS_MARKETERS_MARK = "equips-marketers"
+
+# A title can name both AI and marketing without ever forming a phrase the
+# literal list contains. "Program Manager, AI and Gemini App Marketing" holds
+# both words, but "and Gemini App" sits between them, so "ai marketing" never
+# appears and the title earned a bonus of zero. 108 of 28,812 titles match both
+# tokens (0.37%), and they include two of Doran's own golden postings.
+#
+# Awarded ONLY when no literal title term fired, so "AI Marketing Technologist
+# Lead" keeps its existing 6.0 rather than collecting this on top.
+TITLE_AI_TOKEN = re.compile(
+    r"(?:^|[^a-z])(ai|a\.i\.|artificial intelligence|genai|generative ai|"
+    r"agentic|llm)(?:[^a-z]|$)",
+    re.IGNORECASE,
+)
+TITLE_MARKETING_TOKEN = re.compile(r"\b(marketing|go.to.market|gtm)\b", re.IGNORECASE)
+TITLE_SPLIT_WEIGHT = 4.0
+TITLE_SPLIT_MARK = "title:ai+marketing"
+
+# ------------------------------------------------ teaching non-builders to build
+#
+# Added 2026-08-28. Doran named this outright as the thing he is looking for,
+# on Apple's "Agentic AI Product Manager, Platform - Sales":
+#
+#   "A key thing I'm looking for is teaching non-technical people to build
+#   agents. The fact that it says 'teams across our worldwide sales organization
+#   build, run, and scale AI agents', is exactly why it's a strong fit for my
+#   skill set and archetype that I'm looking for."
+#
+# This is the power-user multiplication model stated as a duty rather than as a
+# buzzword, and no term in the vocabulary above caught it. Requires the AI or
+# agent context in the same sentence, so ordinary "enable non-technical users to
+# self-serve reports" does not qualify: 67 of 28,812 postings match (0.23%).
+NONTECHNICAL_BUILDER = re.compile(
+    r"(non.?technical|business users?|citizen developers?)[^.]{0,200}"
+    r"\b(build|create|ship|deploy|run|scale|author)\w*\b[^.]{0,80}"
+    r"(agent|ai|automation|workflow)"
+    r"|(agent|ai|automation|workflow)[^.]{0,120}"
+    r"\b(build|create|ship|deploy|run|scale|author)\w*\b[^.]{0,120}"
+    r"(non.?technical|business users?|citizen developers?)",
+    re.IGNORECASE,
+)
+NONTECHNICAL_BUILDER_WEIGHT = 4.5
+NONTECHNICAL_BUILDER_MARK = "teaches-nontechnical-to-build"
+
+# ------------------------------------------------------- sales as a business org
+#
+# Added 2026-08-28. _has_both_sides demands an AI signal AND a business-context
+# signal, and the context side only ever recognised marketing or company-wide
+# language. A role serving the SALES org named neither, so Apple's posting --
+# 48.0 points, well clear of the 40.0 floor, and the strongest agentic-enablement
+# content in the set -- was blocked outright rather than ranked lower.
+#
+# Doran: "the fact that it's sales only isn't necessarily a hard blocker, but
+# rather, maybe it should make the scoring system slightly hurt to lose a point
+# or points. But a blocker is too harsh because marketing and sales are still
+# somewhat adjacent roles."
+#
+# So this UNBLOCKS the gate and is deliberately worth ZERO points. The deduction
+# he asked for already exists downstream as the `sales_field` scope modifier
+# (-0.30 in config/scoring.yml), which is the right place for it: it prices how
+# strong a candidate he is, not how relevant the posting is.
+#
+# Worth nothing on purpose. Scored at even 2.0 these terms admitted 109 extra
+# postings, nearly all of them ordinary sales jobs -- Channel Sales Director,
+# Sales Operations Analyst -- because the sales vocabulary itself was pushing
+# marginal roles over the floor. At zero, the same change admits 2, and a sales
+# role still has to earn the floor on genuine AI-enablement content.
+SALES_CONTEXT = re.compile(
+    r"\b(sales organi[sz]ation|sales org|worldwide sales|channel sales|"
+    r"revenue organi[sz]ation|revenue team|sales team|field team|sellers|"
+    r"commercial team|field organi[sz]ation)\b",
+    re.IGNORECASE,
+)
+SALES_CONTEXT_MARK = "sales-context"
+
 # --------------------------------------------------------------- title filters
 
 # Engineering disciplines Doran is not a fit for. Deliberately specific: a bare
@@ -362,7 +601,58 @@ KILLER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("carries_quota", re.compile(r"\b(sales quota|carry a quota|quota.carrying|book of business|close deals)\b", re.I)),
     ("relocation_required", re.compile(r"\b(relocation is required|must relocate|required to relocate)\b", re.I)),
     ("oncall", re.compile(r"\bon.?call rotation\b", re.I)),
+    # NOTE: killers with a false-positive guard are listed in KILLER_EXEMPTIONS
+    # below. Add the guard there rather than weakening the pattern here.
 ]
+
+# A PhD named as ONE OPTION among lower degrees is not a PhD requirement.
+#
+# NVIDIA's "Senior Architect, Agentic AI for Marketing" -- Santa Clara,
+# $224k-$356.5k, explicit human-in-the-loop framing, the single closest role to
+# Doran's archetype found on 2026-08-27 -- opens its requirements with "A BS,
+# MS, or PhD in Computer Science, AI/ML, Electrical Engineering, Data Science, a
+# related technical field, or equivalent experience." A bachelor's satisfies
+# that, and "or equivalent experience" satisfies it without a degree at all, but
+# phd_in_field fired on the phrase and threw the posting out before scoring.
+#
+# The guard looks for a lower degree, or an equivalent-experience escape hatch,
+# in the same sentence. A genuine "PhD in Machine Learning required" has
+# neither, so the killer still fires on it.
+_DEGREE_ALTERNATIVES = re.compile(
+    r"\b(b\.?s\.?c?|b\.?a\.?|m\.?s\.?c?|m\.?a\.?|bachelor\w*|master\w*|"
+    r"undergraduate)\b[^.]{0,120}?\bph\.?\s?d",
+    re.IGNORECASE,
+)
+_EQUIVALENT_EXPERIENCE = re.compile(
+    r"\bph\.?\s?d\b[^.]{0,160}\b(or\s+)?equivalent\s+(practical\s+)?experience\b",
+    re.IGNORECASE,
+)
+
+
+# A PhD listed under "preferred", "nice to have" or "a plus" is not a
+# requirement either. Bounded to the same sentence so a "required" clause
+# elsewhere in the posting cannot be excused by a "preferred" one.
+_PHD_PREFERRED = re.compile(
+    r"\bph\.?\s?d\b[^.]{0,120}\b(preferred|a plus|nice.to.have|desirable|"
+    r"advantageous|bonus)\b"
+    r"|\b(preferred|nice.to.have|desirable)\b[^.]{0,120}\bph\.?\s?d\b",
+    re.IGNORECASE,
+)
+
+
+def _phd_is_optional(description: str) -> bool:
+    """True when the PhD is an alternative or a preference, not a requirement."""
+    return bool(_DEGREE_ALTERNATIVES.search(description)
+                or _EQUIVALENT_EXPERIENCE.search(description)
+                or _PHD_PREFERRED.search(description))
+
+
+# name -> predicate. A killer whose name appears here is skipped when its
+# predicate says the match is a false positive.
+KILLER_EXEMPTIONS: dict[str, Callable[[str], bool]] = {
+    "phd_in_field": _phd_is_optional,
+    "requires_phd": _phd_is_optional,
+}
 
 _NON_US = re.compile(
     r"\b(india|united kingdom|london|dublin|ireland|germany|berlin|munich|"
@@ -511,14 +801,45 @@ _CRO_IS_CONVERSION = re.compile(
 )
 
 
+# A bare C-suite acronym in a trailing comma clause names the ORG the role
+# serves, not the role's own rank: "AI Transformation Owner, CRO" is an owner
+# inside the Chief Revenue Officer's organization. That posting is a calibration
+# anchor scoring 4.53 AND one Doran applied to, and the title gate was throwing
+# it out before it could be scored.
+#
+# Only the acronyms, and only spelled exactly, and only in the trailing clause.
+# A spelled-out band is always a band -- JPMorgan's "Martech Operations and AI
+# Enablement Lead - Vice President" is the anti-example this must never let in.
+_ORG_SUFFIX = re.compile(
+    r"^(cro|cmo|cto|coo|cio)( org| organi[sz]ation| office| team)?$",
+    re.IGNORECASE,
+)
+
+
+def _band_is_org_scope(title: str, band: str) -> bool:
+    if band.lower() not in {"cro", "cmo", "cto", "coo", "cio"}:
+        return False
+    head, sep, tail = title.rpartition(",")
+    if not sep or not _ORG_SUFFIX.match(tail.strip()):
+        return False
+    # Only when the part before the comma is not itself a rejected band --
+    # "VP, CMO" is still a VP.
+    return _title_band_rejected(head, _NO_RECURSION) is None
+
+
+_NO_RECURSION = "__scope_check__"
+
+
 def _title_band_rejected(title: str, track: str | None = None) -> str | None:
     cleaned = clean(title)
     lowered = f" {cleaned.lower()} "
-    for band in _reject_bands(track):
+    for band in _reject_bands(None if track == _NO_RECURSION else track):
         name = str(band).lower()
         if not re.search(rf"\b{re.escape(name)}\b", lowered):
             continue
         if name == "cro" and _CRO_IS_CONVERSION.search(cleaned):
+            continue
+        if track != _NO_RECURSION and _band_is_org_scope(cleaned, name):
             continue
         return str(band)
     return None
@@ -549,10 +870,29 @@ def score_relevance(title: str, description: str) -> tuple[float, list[str]]:
     tally(ENTERPRISE_CONTEXT_TERMS, body)
     tally(BUILD_TERMS, body)
 
+    # The archetype stated as a sentence rather than as a keyword.
+    if EQUIPS_MARKETERS.search(body):
+        total += EQUIPS_MARKETERS_WEIGHT
+        matched.append(EQUIPS_MARKETERS_MARK)
+    if NONTECHNICAL_BUILDER.search(body):
+        total += NONTECHNICAL_BUILDER_WEIGHT
+        matched.append(NONTECHNICAL_BUILDER_MARK)
+    # Recorded, never scored -- it exists to satisfy the both-sides gate only.
+    if SALES_CONTEXT.search(body):
+        matched.append(SALES_CONTEXT_MARK)
+
     for term, weight in TITLE_BONUS_TERMS.items():
         if term in title_l:
             total += weight
             matched.append(f"title:{term}")
+
+    # A split AI-and-marketing title, awarded only when no literal title term
+    # already fired, so a title is never paid twice for the same fact.
+    if (not any(m.startswith("title:") for m in matched)
+            and TITLE_AI_TOKEN.search(title_l)
+            and TITLE_MARKETING_TOKEN.search(title_l)):
+        total += TITLE_SPLIT_WEIGHT
+        matched.append(TITLE_SPLIT_MARK)
 
     return total, matched
 
@@ -565,8 +905,20 @@ def _has_both_sides(matched: list[str]) -> bool:
     roles before they were ever scored -- but those still qualify for Doran, just
     at a slightly lower rank via the scope modifier.
     """
-    ai_side = set(AI_ENABLEMENT_TERMS) | {f"title:{t}" for t in TITLE_BONUS_TERMS}
-    context_side = set(MARKETING_CONTEXT_TERMS) | set(ENTERPRISE_CONTEXT_TERMS)
+    ai_side = (set(AI_ENABLEMENT_TERMS)
+               | {f"title:{t}" for t in TITLE_BONUS_TERMS}
+               # Both added 2026-08-28. "equip marketers with the tools" is an
+               # AI-enablement statement even when the word "AI" is elsewhere in
+               # the posting, and a title naming both AI and marketing is the
+               # same signal the literal title terms carry.
+               | {EQUIPS_MARKETERS_MARK, TITLE_SPLIT_MARK,
+                  # Teaching non-technical people to build agents is an
+                  # AI-enablement duty whatever org it sits in.
+                  NONTECHNICAL_BUILDER_MARK})
+    # Sales counts as a business audience. It is scored at zero and ranked down
+    # later by the sales_field scope modifier, but it is no longer a blocker.
+    context_side = (set(MARKETING_CONTEXT_TERMS) | set(ENTERPRISE_CONTEXT_TERMS)
+                    | {SALES_CONTEXT_MARK})
     hits = set(matched)
     return bool(hits & ai_side) and bool(
         (hits & context_side)
@@ -576,25 +928,29 @@ def _has_both_sides(matched: list[str]) -> bool:
 
 # Bay Area city names are not unique. Belmont is also in Massachusetts,
 # Newark in New Jersey, Richmond in Virginia, Dublin in Ohio, Concord in New
-# Hampshire. These patterns are what stop a Texas job from being read as a
-# ten-minute commute.
+# Hampshire. So a bare city name is not enough -- what follows it decides.
 #
-# Two-letter codes are only honoured in the 'City, ST' position -- after a
-# comma. Half of them are ordinary English words (IN, OR, ME, OK, HI, LA, DE,
-# ID, CO, PA), so matching them loose turns 'Offices in San Francisco' into a
-# posting in Indiana. Full state names are matched anywhere.
-_CALIFORNIA = re.compile(
-    r'(,\s*(ca|calif)\b)|(\bcalifornia\b)', re.IGNORECASE
+# Judged per city rather than per string. An earlier version bailed out of the
+# whole string whenever it saw any non-California state, which killed Gong's
+# 'GTM AI Architect' -- listed as 'Austin | Chicago | New York City | Salt Lake
+# City | San Francisco'. That posting names San Francisco outright; the New
+# York in the same list is a different office, not evidence against it.
+_CA_AFTER = r'^[,]?\s*(ca|calif|california)\b'
+# A state directly after the city means the city belongs to that state.
+# Two-letter codes only count after a comma -- IN, OR, ME, OK, HI, LA, DE, ID,
+# CO and PA are all ordinary English words.
+_STATE_AFTER = re.compile(
+    r'^,\s*(?:al|ak|az|ar|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b|^[,]?\s*(?:alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b',
+    re.IGNORECASE,
 )
-_STATE_CODE_AFTER_COMMA = r',\s*(?:al|ak|az|ar|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b'
-_STATE_NAME = r'\b(?:alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
-_NON_CA_STATE = re.compile(
-    _STATE_CODE_AFTER_COMMA + r'|' + _STATE_NAME, re.IGNORECASE
-)
-# Used on the text immediately following a matched city, where a state code
-# may legitimately lead with its comma already stripped.
-_TRAILING_STATE = re.compile(
-    r'^(?:al|ak|az|ar|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b|^(?:alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b', re.IGNORECASE
+_CA_MARKER = re.compile(_CA_AFTER, re.IGNORECASE)
+# Punctuation after a city means the next thing is a separate item -- another
+# office, a site code, a note. The city stands on its own.
+_SEPARATOR_AFTER = re.compile(r'^[\s]*($|[|;/,)(\-])')
+# Words that can follow a city without changing which city it is.
+_HARMLESS_AFTER = re.compile(
+    r'^\s*(bay area|area|metro|region|office|offices|hq|headquarters|usa|us|united states|remote|hybrid|or|and)\b',
+    re.IGNORECASE,
 )
 
 
@@ -625,13 +981,6 @@ def reachable_cities_in(text: str | None) -> list[tuple[str, int]]:
     if not lowered:
         return []
 
-    says_california = bool(_CALIFORNIA.search(lowered))
-    other_state = bool(_NON_CA_STATE.search(lowered))
-    # Every state named here is somewhere else. Nothing in this string is in
-    # commuting range, however familiar the city name looks.
-    if other_state and not says_california:
-        return []
-
     found: dict[str, int] = {}
     for city, minutes in known.items():
         if minutes > limit:
@@ -640,12 +989,20 @@ def reachable_cities_in(text: str | None) -> list[tuple[str, int]]:
         match = re.search(rf"\b{re.escape(name)}\b", lowered)
         if not match:
             continue
-        # "Newark, NJ" inside a string that also names a California office is
-        # still the New Jersey one.
-        trailing = lowered[match.end():match.end() + 24]
-        if _TRAILING_STATE.match(trailing.lstrip(" ,-/(")):
+        after = lowered[match.end():match.end() + 40]
+        # "San Francisco, CA" -- settled, keep it.
+        if _CA_MARKER.match(after):
+            found[city] = minutes
             continue
-        found[city] = minutes
+        # "Newark, NJ" is the New Jersey one even when a California office is
+        # named elsewhere in the same string.
+        if _STATE_AFTER.match(after):
+            continue
+        # A separator or a harmless word means the city stands alone. Anything
+        # else is a noun attached to it -- "(Belmont Campus)" in an Austin
+        # posting, "Belmont St" in a Boston one -- and is not the city at all.
+        if _SEPARATOR_AFTER.match(after) or _HARMLESS_AFTER.match(after):
+            found[city] = minutes
     return sorted(found.items(), key=lambda kv: kv[1])
 
 
@@ -785,8 +1142,12 @@ def evaluate(
 
     # 6. Killer terms.
     for name, pattern in KILLER_PATTERNS:
-        if pattern.search(description):
-            return PrefilterResult(False, f"disqualifying requirement: {name}")
+        if not pattern.search(description):
+            continue
+        exempt = KILLER_EXEMPTIONS.get(name)
+        if exempt and exempt(description):
+            continue
+        return PrefilterResult(False, f"disqualifying requirement: {name}")
 
     # 7. Content relevance, evaluated against BOTH tracks. A posting survives if
     #    it clears either one -- track A is the AI-enablement list, track B the
@@ -800,6 +1161,13 @@ def evaluate(
     growth_title_block = _growth_title_rejected(title) if track_b else None
     if growth_title_block:
         track_b = False
+
+    # A posting whose marketing vocabulary dwarfs its AI vocabulary is a
+    # marketing role using AI words, not an AI role. Dropping the AI track
+    # routes it to the marketing list and its stricter bar.
+    if (track_a and track_b and relevance
+            and growth_rel / relevance >= MARKETING_IN_AI_CLOTHING):
+        track_a = False
 
     tracks = []
     if track_a:

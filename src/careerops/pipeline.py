@@ -379,9 +379,28 @@ def discover_via_boards(
     """
     from .sources import boards
 
+    # Only companies whose OWN feed is actually readable count as covered.
+    #
+    # An entry in sources.yml with status "dead", or with no resolved (ats,
+    # slug), is watched in name only -- nothing fetches it. Treating those as
+    # "known" hid them twice over: the company sweep had no board to read, and
+    # then this channel threw away their board leads on the assumption the
+    # sweep already had them. That is a silent hole, not a slow one.
+    #
+    # NVIDIA sat in it. Its board runs on Eightfold, so it resolved to nothing
+    # and was marked dead, and the only NVIDIA postings this system has ever
+    # seen arrived because LinkedIn labels the employer "NVIDIA AI" rather than
+    # "Nvidia", which accidentally slipped past this name check. Measured
+    # 2026-08-27: 42 of the 294 companies in sources.yml are in that state,
+    # including Adobe, Salesforce, Intuit, PayPal, Atlassian and CrowdStrike.
+    #
+    # Repeat re-probing of a company that will never resolve is already bounded
+    # by the resolve backlog's attempt limit, and an exhausted company still
+    # has its postings read from the board page below.
     known = {
         (entry.get("name") or "").strip().lower()
         for entry in (config.sources().get("companies") or [])
+        if entry.get("status") == "live" and entry.get("ats") and entry.get("slug")
     }
 
     from .sources import builtin
@@ -617,7 +636,16 @@ def _postings_from_leads(leads: list, notes: list[str],
                 # it than to queue a posting the rubric cannot read.
                 thin += 1
                 continue
+            # Fall back to the body when the board exposes no structured pay
+            # field. LinkedIn only renders `salary__range` sometimes, and when
+            # it does not, the pay is still written into the posting text --
+            # "The pay range for this role is: 105,000 - 175,000 USD per year".
+            # Reading only the structured field left 209 of 209 LinkedIn
+            # postings with no salary at all, against 34-94% for every other
+            # source, so dimension 4 scored as "unpublished" on all of them.
             smin, smax = parse_salary(salary_raw) if salary_raw else (None, None)
+            if smin is None and smax is None:
+                smin, smax = parse_salary(description)
             city, region, country = parse_location(lead.location)
             out.append(Posting(
                 source_id=f"{lead.board}:{lead.job_id or lead.url}",

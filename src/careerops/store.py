@@ -181,6 +181,12 @@ _MIGRATIONS = [
     ("evaluations", "track", "TEXT DEFAULT 'ai_enablement'"),
     ("evaluations", "scope_modifier", "REAL DEFAULT 0"),
     ("evaluations", "connection_bonus", "REAL DEFAULT 0"),
+    # Kept in their own columns, never smeared into weighted_score alone, so a
+    # holistic nudge can always be told apart from a rubric judgement and can be
+    # unwound. See tiebreak.py for why the licence is this narrow.
+    ("evaluations", "tiebreak_adjustment", "REAL DEFAULT 0"),
+    ("evaluations", "tiebreak_note", "TEXT"),
+    ("evaluations", "tiebreak_quotes", "TEXT"),
     ("resolve_backlog", "display", "TEXT"),
 ]
 
@@ -596,18 +602,50 @@ def latest_evaluation(conn: sqlite3.Connection, posting_id: int) -> sqlite3.Row 
     ).fetchone()
 
 
+def apply_tiebreak(conn: sqlite3.Connection, eval_id: int, *,
+                   base_score: float, adjustment: float, note: str,
+                   quotes: list[str], max_score: float = 5.0) -> float:
+    """Write a bounded holistic nudge onto an existing evaluation.
+
+    Rewrites `weighted_score` from the BASE score every time rather than adding
+    to whatever is there, so re-running the tiebreaker replaces a previous nudge
+    instead of stacking on it. The adjustment and its evidence stay in their own
+    columns, which is what lets `calibrate` prove the anchors were not touched.
+    """
+    final = min(max_score, max(1.0, round(base_score + adjustment, 3)))
+    conn.execute(
+        """UPDATE evaluations
+              SET weighted_score = ?, tiebreak_adjustment = ?,
+                  tiebreak_note = ?, tiebreak_quotes = ?
+            WHERE id = ?""",
+        (final, round(adjustment, 3), note, json.dumps(quotes), eval_id),
+    )
+    return final
+
+
 def presentable(conn: sqlite3.Connection, threshold: float,
                 run_id: int | None = None,
-                track: str | None = None) -> list[sqlite3.Row]:
+                track: str | None = None,
+                bucket: str | None = None) -> list[sqlite3.Row]:
     """Evaluated postings that clear the bar, pass Block G, are live, and are unseen.
 
-    `track` selects which list. Evaluations are stored per track, so the same
-    posting can hold a track A score and a track B score; the report shows it
-    once, in track A.
+    `track` selects which list by the track its SCORE was recorded under.
+
+    `bucket` selects by which of the three buckets the POSTING belongs to,
+    derived from postings.tracks. The two are different questions and must not
+    be combined: a marketing-only posting's only evaluation is recorded under
+    growth_marketing, so filtering on both would return nothing. When a bucket
+    is given the track filter is deliberately dropped.
+
+    The three buckets are disjoint by construction -- a posting has exactly one
+    -- so bucket routing needs no dedupe between lists.
     """
+    if bucket is not None:
+        track = None
     sql = """
         SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict,
-               e.block_g_flags, e.track, e.connection_bonus
+               e.block_g_flags, e.track, e.connection_bonus,
+               e.tiebreak_adjustment, e.tiebreak_note
         FROM postings p
         JOIN evaluations e ON e.id = (
             SELECT id FROM evaluations
@@ -620,12 +658,16 @@ def presentable(conn: sqlite3.Connection, threshold: float,
           AND e.block_g_verdict != 'FAIL'
         ORDER BY e.weighted_score DESC
     """
-    return conn.execute(sql, (track, track, STATE_EVALUATED, threshold)).fetchall()
+    rows = conn.execute(sql, (track, track, STATE_EVALUATED, threshold)).fetchall()
+    if bucket is None:
+        return rows
+    return [r for r in rows if config.bucket_of(r["tracks"]) == bucket]
 
 
 def worth_knowing(conn: sqlite3.Connection, threshold: float,
                   floor: float, limit: int = 3,
-                  track: str | None = None) -> list[sqlite3.Row]:
+                  track: str | None = None,
+                  bucket: str | None = None) -> list[sqlite3.Row]:
     """Evaluated postings just under the bar, so nothing good is silently hidden.
 
     Hard-capped and rendered as one line each -- this exists so a near-miss gets
@@ -636,6 +678,8 @@ def worth_knowing(conn: sqlite3.Connection, threshold: float,
     crowd out near-misses from the other track -- exactly the hiding this
     function exists to prevent.
     """
+    if bucket is not None:
+        track = None
     sql = """
         SELECT p.*, e.weighted_score, e.fit_summary, e.block_g_verdict, e.block_g_flags
         FROM postings p
@@ -647,11 +691,17 @@ def worth_knowing(conn: sqlite3.Connection, threshold: float,
         WHERE p.state = ? AND p.is_live = 1
           AND e.weighted_score < ? AND e.weighted_score >= ?
           AND e.block_g_verdict != 'FAIL'
-        ORDER BY e.weighted_score DESC LIMIT ?
+        ORDER BY e.weighted_score DESC
     """
-    return conn.execute(
-        sql, (track, track, STATE_EVALUATED, threshold, floor, limit),
+    rows = conn.execute(
+        sql, (track, track, STATE_EVALUATED, threshold, floor),
     ).fetchall()
+    if bucket is not None:
+        rows = [r for r in rows if config.bucket_of(r["tracks"]) == bucket]
+    # LIMIT is applied here rather than in SQL so the cap counts rows in THIS
+    # bucket. Applied in the query it would be spent on other buckets' rows and
+    # silently return fewer than the cap allows.
+    return rows[:limit]
 
 
 def near_misses(conn: sqlite3.Connection, threshold: float,
@@ -728,6 +778,31 @@ def shortlist(conn: sqlite3.Connection) -> list[sqlite3.Row]:
            WHERE p.state IN ('interested', 'saved', 'applied')
            ORDER BY e.weighted_score DESC""",
     ).fetchall()
+
+
+def prior_applications(conn: sqlite3.Connection) -> dict[str, list[tuple[str, str]]]:
+    """Every company Doran has already applied to -> [(date, title), ...].
+
+    Keyed on the normalized company name so "Coupa" and "Coupa Software" are the
+    same employer. Doran, 2026-08-26: reading a new posting he wants to know he
+    already has an application in at that company, and which role it was, so the
+    two do not collide.
+    """
+    out: dict[str, list[tuple[str, str]]] = {}
+    rows = conn.execute(
+        """SELECT p.company, p.title, v.created_at
+           FROM postings p JOIN verdicts v ON v.posting_id = p.id
+           WHERE v.verdict = 'applied'
+           ORDER BY v.created_at DESC"""
+    ).fetchall()
+    for row in rows:
+        key = normalize_company(row["company"])
+        if not key:
+            continue
+        entry = (str(row["created_at"] or "")[:10], row["title"])
+        if entry not in out.setdefault(key, []):
+            out[key].append(entry)
+    return out
 
 
 def applied_postings(conn: sqlite3.Connection) -> list[sqlite3.Row]:

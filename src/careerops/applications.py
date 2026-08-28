@@ -59,6 +59,11 @@ _RESPONSIBILITIES = [
     "your responsibilities", "you will", "you'll", "day to day", "day-to-day",
     "a day in the life", "what the job involves", "scope of the role",
     "what we're looking for you to do",
+    # Jobgether rewrites every posting into its own house style and calls this
+    # section "Accountabilities". Three of Doran's applications on 2026-08-26
+    # archived with no responsibilities section at all because of it -- and the
+    # archive is what he preps from once the posting is taken down.
+    "accountabilities", "key accountabilities", "your accountabilities",
 ]
 
 _REQUIREMENTS = [

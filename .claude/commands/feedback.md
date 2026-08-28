@@ -112,6 +112,13 @@ anchor (an entry in `calibration_anchors` plus a doc under `ref-docs/golden/` or
 python cli.py calibrate --check
 ```
 
+This now runs TWO checks. The anchors catch rubric drift. The applied-job check
+catches the other failure: a change to a gate that stops a role Doran actually
+wanted from ever reaching the rubric. A `BLOCKED` line there is more serious than
+an anchor moving -- it means a real match has gone invisible. Do not write off a
+`BLOCKED` line as acceptable collateral; find the distinction the gate is failing
+to draw and encode that instead.
+
 If an anchor has left its band, the rule over-corrected. Tell Doran which anchor
 moved and in which direction, and propose a narrower wording rather than leaving
 the rubric drifting.

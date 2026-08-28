@@ -45,10 +45,13 @@ Score all 10 dimensions plus Block G, with a quoted line of evidence per block. 
 python cli.py record-eval --run <run_id> --file data/runs/<run_id>/scores.json
 ```
 
+**Do not add `--track`.** The queue template carries a `track` per posting,
+derived from its bucket, and `record-eval` resolves the rubric per item.
+
 ## 2b. Resolve San Francisco offices — last step, finalists only
 
 Same rule as a broad scan. **After** scoring, and **only** for postings that
-clear 4.0 and resolve to San Francisco, find the neighborhood or street address
+clear their bucket's bar and resolve to San Francisco, find the neighborhood or street address
 in the posting body (or, failing that, the company's careers page via the
 `claude-in-chrome` MCP) and re-score dimension 5 against the neighborhood entries
 in `config/commute.yml`. Doran trains to SF — 40 minutes to the 4th & King exit
@@ -62,7 +65,7 @@ and say so rather than guessing.
 python cli.py report --run <run_id> --companies "$ARGUMENTS"
 ```
 
-Print the eight-field list for anything scoring 4.0+ — including the **posted
+Print the eight-field list for anything clearing its bucket's bar — including the **posted
 date**, which he asked for specifically.
 
 Two things `cli.py report` now does for you, both added on Doran's instruction on
@@ -77,9 +80,9 @@ Two things `cli.py report` now does for you, both added on Doran's instruction o
   the path alongside it. Never reply with just the path, and never hand-write the
   file.
 
-Then the "Worth knowing about" tier (3.7–4.0), then the near-miss lines. The
+Then the "Worth knowing about" tier (within 0.30 of the bar), then the near-miss lines. The
 near-miss section is unique to targeted scans: if a company Doran named has nothing
-above 4.0, he gets one line saying what was there and why it fell short. Knowing a
+above the bar, he gets one line saying what was there and why it fell short. Knowing a
 company is dry is useful; silence is not. Never promote either tier into the match
 list.
 
@@ -92,5 +95,8 @@ Full guidance in `rubric/rubric-A-G.md`.
 
 ## Rules
 
-- Only 4.0+ postings appear as matches, exactly as in a broad scan.
+- Only postings clearing their bucket's bar appear as matches, exactly as in a
+  broad scan. The three bars are AI+marketing 3.75, AI enablement 3.85, marketing
+  4.00, set in `config/profile.yml` under `review.bucket_thresholds` and applied
+  by `cli.py report` automatically.
 - Never build, suggest, or run anything that submits an application.
