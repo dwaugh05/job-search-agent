@@ -4,7 +4,7 @@
 - **Posted:** 2026-07-16
 - **Score:** 4.4
 - **Location:** Remote
-- **Salary:** $133,500 - $200,300
+- **Salary:** $153,500 - $220,300
 - **Posting:** https://jobs.ashbyhq.com/harvey/393b91ff-9966-4a22-a39b-f49014965693
 - **Why I applied:** Already applied previously and interviewed for this. Harvey has it posted under a couple of different names since it's a new job that doesn't really have a set title like many jobs in the world.
 

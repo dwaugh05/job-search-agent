@@ -4,7 +4,7 @@
 - **Posted:** 2026-07-16
 - **Score:** 4.1
 - **Location:** San Francisco - Hybrid
-- **Salary:** $133,500 - $200,300
+- **Salary:** $153,500 - $220,300
 - **Posting:** https://jobs.ashbyhq.com/harvey/c338dfc8-693a-47d9-8ada-af609ea20b52
 - **Why I applied:** Same Harvey AI role as the remote posting, already applied and interviewed. They have it posted under a couple of different names.
 
