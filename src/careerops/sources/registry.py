@@ -19,7 +19,8 @@ import httpx
 
 from .. import config
 from ..models import Posting
-from . import ashby, greenhouse, lever, smartrecruiters, workable, workday
+from . import (apple, ashby, eightfold, google, greenhouse, lever,
+               smartrecruiters, workable, workday)
 
 ADAPTERS: dict[str, Any] = {
     greenhouse.NAME: greenhouse,
@@ -28,12 +29,23 @@ ADAPTERS: dict[str, Any] = {
     smartrecruiters.NAME: smartrecruiters,
     workable.NAME: workable,
     workday.NAME: workday,
+    eightfold.NAME: eightfold,
+    apple.NAME: apple,
+    google.NAME: google,
 }
+
+# Single-employer portals with no board endpoint. Neither publishes a feed that
+# can be enumerated, so both are searched with the shared archetype query set
+# and their results deduplicated -- see _fetch_portal.
+PORTALS = {apple.NAME, google.NAME}
 
 PROBE_ORDER = [greenhouse.NAME, ashby.NAME, lever.NAME,
                smartrecruiters.NAME, workable.NAME]
 # workday is intentionally NOT in the probe order -- its slug is a
 # tenant:instance:site triple discovered from robots.txt, not a guessable name.
+# eightfold is out for the same reason: its slug packs subdomain and domain
+# ("nvidia:nvidia.com"), and the search endpoint answers 422 without the domain,
+# so a probe cannot be assembled from the company name alone.
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -190,6 +202,36 @@ def _get_json(client: httpx.Client, url: str,
     Returns None both for "no such board" and for "the request failed", so
     callers that care about the difference should probe explicitly.
     """
+    response = _get_response(client, url, timeout=timeout, max_attempts=max_attempts)
+    if response is None:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
+def _get_text(client: httpx.Client, url: str,
+              timeout: httpx.Timeout | None = None,
+              max_attempts: int | None = None) -> str | None:
+    """GET an HTML page through the same rate limiting and backoff as a feed.
+
+    Apple and Google serve their postings as server-rendered HTML rather than
+    JSON. That is a difference in encoding, not in how carefully we are allowed
+    to hit somebody else's servers, so it shares _get_response.
+    """
+    response = _get_response(client, url, timeout=timeout, max_attempts=max_attempts)
+    return response.text if response is not None else None
+
+
+def _get_response(client: httpx.Client, url: str,
+                  timeout: httpx.Timeout | None = None,
+                  max_attempts: int | None = None) -> httpx.Response | None:
+    """One polite GET: per-host throttle, backoff, circuit breaker.
+
+    This is the single place where outbound read traffic is paced. Everything
+    that talks to somebody else's server goes through here.
+    """
     if _host_is_down(url):
         return None
 
@@ -202,7 +244,7 @@ def _get_json(client: httpx.Client, url: str,
         try:
             response = (client.get(url, timeout=timeout) if timeout is not None
                         else client.get(url))
-        except httpx.HTTPError:
+        except (httpx.HTTPError, UnicodeError, ValueError):
             # Includes read and connect timeouts, which is how a hung host
             # presents. Count it: enough of these and we stop talking to this
             # host for the rest of the run.
@@ -239,10 +281,7 @@ def _get_json(client: httpx.Client, url: str,
             return None
         if response.status_code != 200:
             return None
-        try:
-            return response.json()
-        except ValueError:
-            return None
+        return response
     return None
 
 
@@ -263,6 +302,19 @@ def _company_matches(company: str, ats: str, jobs: list, payload: Any) -> bool:
     """
     wanted = _squash(company)
     if not wanted:
+        return True
+
+    # Eightfold identifies the employer by SUBDOMAIN, not in the payload: the
+    # positions carry only title, department and location, so a text search for
+    # "nvidia" fails on NVIDIA's own board. The slug is resolved once by hand
+    # and stored, so trusting it is correct here and the text check is not.
+    if ats == eightfold.NAME:
+        return True
+
+    # Apple and Google are single-employer portals: the host IS the employer,
+    # so there is no wrong-company-behind-a-plausible-slug failure to guard
+    # against, and the postings themselves rarely repeat the company name.
+    if ats in PORTALS:
         return True
 
     # SmartRecruiters is the only one of the five that states the employer
@@ -317,6 +369,15 @@ def probe_detailed(
     try:
         if ats == workday.NAME:
             payload = workday.search(client, slug, offset=0)
+        elif ats in PORTALS:
+            # These serve HTML, not JSON, and have no board to enumerate. A
+            # live probe is "does an archetype search return any result at
+            # all" -- enough to tell a working portal from a broken one.
+            adapter = ADAPTERS[ats]
+            payload = _get_text(
+                client, adapter.build_url(query="AI enablement", page=1),
+                timeout=PROBE_TIMEOUT, max_attempts=1,
+            )
         else:
             # One attempt only. Retrying a probe is pointless -- a failure here
             # means "this slug is not it", and the caller has dozens more to
@@ -359,6 +420,16 @@ def fetch_company(
         # like it had zero openings.
         if ats == workday.NAME:
             return _fetch_workday(client, slug, company, on_note)
+
+        # Eightfold splits listing from description across two endpoints, the
+        # same shape as Workday, so it needs the same list-then-detail handling
+        # rather than the generic single GET.
+        if ats == eightfold.NAME:
+            return _fetch_eightfold(client, slug, company, on_note)
+
+        # Apple and Google have no enumerable board, only a search box.
+        if ats in PORTALS:
+            return _fetch_portal(ats, client, slug, company, on_note)
 
         if ats == smartrecruiters.NAME:
             # The list endpoint caps at 100 per request and this code only ever
@@ -545,6 +616,137 @@ def _fetch_workday(client, slug, company, on_note=None):
     return postings
 
 
+PORTAL_DETAIL_CAP = 60
+
+
+def _portal_queries() -> list[str]:
+    """The archetype query set, shared with the role-first board channel.
+
+    Reusing boards.py's list on purpose: two vocabularies for the same archetype
+    would drift apart, and a term added for LinkedIn should reach Apple and
+    Google on the same run.
+    """
+    from . import boards
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for query in list(boards.DEFAULT_QUERIES_AI) + list(boards.DEFAULT_QUERIES_GROWTH):
+        key = query.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            ordered.append(query)
+    return ordered
+
+
+def _fetch_portal(ats, client, slug, company, on_note=None):
+    """Search a single-employer portal for the archetype and read the hits.
+
+    Apple and Google both answer a search box and neither exposes an
+    enumerable board, so "sweep the company" means "run every archetype query
+    and union the results". Both rank by relevance, so depth past the first
+    couple of pages is noise rather than supply.
+    """
+    adapter = ADAPTERS[ats]
+    found: dict[str, dict] = {}
+    for query in _portal_queries():
+        for page in range(1, adapter.MAX_PAGES + 1):
+            payload = _get_text(client, adapter.build_url(query=query, page=page))
+            if not payload:
+                break
+            batch = adapter.extract_jobs(payload)
+            if not batch:
+                break
+            for job in batch:
+                key = str(job.get("positionId") or job.get("id") or "")
+                if key:
+                    found.setdefault(key, job)
+
+    if not found and on_note:
+        on_note(f"{company}: {ats} search returned nothing")
+
+    candidates = [
+        job for job in found.values()
+        if _SR_WORTH_DETAIL.search(str(job.get("postingTitle") or job.get("title") or ""))
+    ]
+    skipped = len(found) - len(candidates)
+    if len(candidates) > PORTAL_DETAIL_CAP:
+        skipped += len(candidates) - PORTAL_DETAIL_CAP
+        candidates = candidates[:PORTAL_DETAIL_CAP]
+    if skipped and on_note:
+        on_note(
+            f"{company}: fetched {len(candidates)} of {len(found)} {ats} postings "
+            f"in detail ({skipped} skipped as clearly off-domain or over the cap)"
+        )
+
+    postings, failures = [], 0
+    for job in candidates:
+        try:
+            if ats == apple.NAME:
+                html = adapter.detail(client, job.get("positionId"))
+            else:
+                html = adapter.detail(client, job.get("id"), job.get("slug"))
+            posting = adapter.parse(job, company, slug, detail_html=html)
+        except Exception:
+            failures += 1
+            continue
+        if posting and posting.title and posting.url:
+            postings.append(posting)
+    if failures and on_note:
+        on_note(f"{company}: {failures}/{len(candidates)} {ats} postings failed to parse")
+    return postings
+
+
+EIGHTFOLD_DETAIL_CAP = 80
+
+
+def _fetch_eightfold(client, slug, company, on_note=None):
+    """Eightfold pages 10 at a time and hides descriptions behind a detail call.
+
+    NVIDIA's board is ~2,695 reqs, so a full listing sweep is ~270 metadata
+    requests. That is the cheap half. Pulling a description for all of them
+    would be 2,695 more, so titles are screened first and only plausible roles
+    are read in full -- the same trade Workday and SmartRecruiters make here.
+    """
+    listings: list[dict] = []
+    for page in range(eightfold.MAX_PAGES):
+        payload = eightfold.search(client, slug, start=page * eightfold.PAGE_SIZE)
+        batch = eightfold.extract_jobs(payload)
+        if not batch:
+            break
+        listings.extend(batch)
+        total = eightfold.total_found(payload)
+        if total is not None and len(listings) >= total:
+            break
+
+    if not listings and on_note:
+        on_note(f"{company}: Eightfold listing returned nothing")
+
+    candidates = [j for j in listings if _SR_WORTH_DETAIL.search(str(j.get("name") or ""))]
+    skipped = len(listings) - len(candidates)
+    if len(candidates) > EIGHTFOLD_DETAIL_CAP:
+        skipped += len(candidates) - EIGHTFOLD_DETAIL_CAP
+        candidates = candidates[:EIGHTFOLD_DETAIL_CAP]
+    if skipped and on_note:
+        on_note(
+            f"{company}: fetched {len(candidates)} of {len(listings)} Eightfold "
+            f"postings in detail ({skipped} skipped as clearly off-domain "
+            "or over the detail cap)"
+        )
+
+    postings, failures = [], 0
+    for job in candidates:
+        try:
+            detail = eightfold.detail(client, slug, job.get("id") or "")
+            posting = eightfold.parse(job, company, slug, detail_payload=detail)
+        except Exception:
+            failures += 1
+            continue
+        if posting and posting.title and posting.url:
+            postings.append(posting)
+    if failures and on_note:
+        on_note(f"{company}: {failures}/{len(candidates)} Eightfold postings failed to parse")
+    return postings
+
+
 def check_url_live(url: str, client: httpx.Client | None = None) -> bool:
     """Liveness check: does this apply URL still resolve to a real page?
 
@@ -557,7 +759,7 @@ def check_url_live(url: str, client: httpx.Client | None = None) -> bool:
     try:
         try:
             response = client.get(url)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, UnicodeError, ValueError):
             return False
         if response.status_code >= 400:
             return False

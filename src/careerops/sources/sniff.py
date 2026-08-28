@@ -142,7 +142,7 @@ def _fetch(client: httpx.Client, url: str) -> str | None:
     _wait_turn(url)
     try:
         response = client.get(url)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UnicodeError, ValueError):
         return None
     if response.status_code != 200:
         return None

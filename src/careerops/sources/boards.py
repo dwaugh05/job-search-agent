@@ -215,7 +215,7 @@ def search_linkedin(
         for attempt in range(THROTTLE_RETRIES):
             try:
                 response = client.get(url)
-            except httpx.HTTPError:
+            except (httpx.HTTPError, UnicodeError, ValueError):
                 break
             if response.status_code == 400:
                 # start >= 1000. This is the real end of the endpoint, measured.
@@ -278,7 +278,7 @@ def fetch_lead_page(client: httpx.Client, lead: Lead) -> tuple[str, str]:
         return "", ""
     try:
         response = client.get(LINKEDIN_JOB.format(job_id=lead.job_id))
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UnicodeError, ValueError):
         return "", ""
     if response.status_code != 200:
         return "", ""

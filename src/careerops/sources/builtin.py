@@ -119,7 +119,7 @@ def search(client: httpx.Client, url: str, max_pages: int = MAX_PAGES) -> list[L
         paged = url if page == 0 else f"{url}{'&' if '?' in url else '?'}page={page + 1}"
         try:
             response = client.get(paged)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, UnicodeError, ValueError):
             break
         if response.status_code != 200:
             break
@@ -149,7 +149,7 @@ def posting_from_lead(client: httpx.Client, lead: Lead) -> Posting | None:
     """Fetch one Built In job page and build a Posting from its JobPosting data."""
     try:
         response = client.get(lead.url)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UnicodeError, ValueError):
         return None
     if response.status_code != 200:
         return None

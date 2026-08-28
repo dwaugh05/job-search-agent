@@ -694,7 +694,25 @@ companies:
   status: dead
   watch: true
 - name: Nvidia
-  status: dead
+  aliases:
+  - NVIDIA
+  - NVIDIA AI
+  - NVIDIA Corporation
+  ats: eightfold
+  slug: nvidia:nvidia.com
+  status: live
+  watch: true
+- name: Apple
+  ats: apple
+  slug: apple
+  status: live
+  watch: true
+- name: Google
+  aliases:
+  - Alphabet
+  ats: google
+  slug: google
+  status: live
   watch: true
 - name: Roblox
   status: live
@@ -1406,6 +1424,121 @@ companies:
 - name: Shelf
   ats: greenhouse
   slug: shelf
+  status: live
+  watch: true
+- name: Deposco
+  ats: ashby
+  slug: deposco
+  status: live
+  watch: true
+- name: Hillpointe
+  ats: greenhouse
+  slug: hillpointe
+  status: live
+  watch: true
+- name: TRM Labs
+  ats: ashby
+  slug: trm-labs
+  status: live
+  watch: true
+- name: PartsSource Inc.
+  ats: greenhouse
+  slug: partssource
+  status: live
+  watch: true
+- name: SageOx
+  ats: ashby
+  slug: sageox
+  status: live
+  watch: true
+- name: Waymo
+  ats: greenhouse
+  slug: waymo
+  status: live
+  watch: true
+- name: Weave Bio
+  ats: ashby
+  slug: weave
+  status: live
+  watch: true
+- name: Rilla
+  ats: ashby
+  slug: rilla
+  status: live
+  watch: true
+- name: Albi
+  ats: workable
+  slug: albi
+  status: live
+  watch: true
+- name: talentpluto
+  ats: workable
+  slug: talentpluto
+  status: live
+  watch: true
+- name: Cisco
+  ats: workday
+  slug: cisco:wd5:cisco_careers
+  status: live
+  watch: true
+- name: Sphere
+  ats: ashby
+  slug: sphere
+  status: live
+  watch: true
+- name: Middesk
+  ats: ashby
+  slug: middesk
+  status: live
+  watch: true
+- name: Oasis Security
+  ats: greenhouse
+  slug: oasissecurity
+  status: live
+  watch: true
+- name: August
+  ats: ashby
+  slug: august
+  status: live
+  watch: true
+- name: SK hynix America
+  ats: greenhouse
+  slug: skhynixamerica
+  status: live
+  watch: true
+- name: Nirvana
+  ats: ashby
+  slug: nirvana
+  status: live
+  watch: true
+- name: Shepherd
+  ats: ashby
+  slug: shepherd
+  status: live
+  watch: true
+- name: Revin
+  ats: ashby
+  slug: revin
+  status: live
+  watch: true
+- name: Gumloop
+  ats: ashby
+  slug: gumloop
+  status: live
+  watch: true
+- name: Shepherd Insurance Agency
+  ats: ashby
+  slug: shepherd
+  status: live
+  watch: true
+- name: Intel
+  ats: workday
+  slug: intel:wd1:external
+  status: live
+  watch: true
+- name: Finix
+  ats: lever
+  slug: finix
   status: live
   watch: true
 browser_boards:

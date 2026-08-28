@@ -90,7 +90,7 @@ def search(client: httpx.Client, slug: str, offset: int = 0) -> dict | None:
                   "offset": offset, "searchText": ""},
             headers={"Content-Type": "application/json", "Accept": "application/json"},
         )
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UnicodeError, ValueError):
         return None
     if response.status_code != 200:
         return None
@@ -120,7 +120,7 @@ def detail(client: httpx.Client, slug: str, external_path: str) -> dict | None:
     _assert_search_url(url)
     try:
         response = client.get(url, headers={"Accept": "application/json"})
-    except httpx.HTTPError:
+    except (httpx.HTTPError, UnicodeError, ValueError):
         return None
     if response.status_code != 200:
         return None
